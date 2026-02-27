@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目管理系统</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-project-diagram"></i>
+                <span>ProjectPro</span>
+            </div>
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li class="nav-item active" onclick="showSection('dashboard')">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>仪表盘</span>
+                </li>
+                <li class="nav-item" onclick="showSection('projects')">
+                    <i class="fas fa-folder-open"></i>
+                    <span>项目列表</span>
+                </li>
+                <li class="nav-item" onclick="showSection('tasks')">
+                    <i class="fas fa-tasks"></i>
+                    <span>任务管理</span>
+                </li>
+                <li class="nav-item" onclick="showSection('team')">
+                    <i class="fas fa-users"></i>
+                    <span>团队成员</span>
+                </li>
+                <li class="nav-item" onclick="showSection('calendar')">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>日历视图</span>
+                </li>
+                <li class="nav-item" onclick="showSection('reports')">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>报表分析</span>
+                </li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-details">
+                    <span class="user-name">管理员</span>
+                    <span class="user-role">项目经理</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="main-content" id="mainContent">
+        <!-- 顶部导航栏 -->
+        <header class="top-header">
+            <div class="header-left">
+                <h1 class="page-title" id="pageTitle">仪表盘</h1>
+            </div>
+            <div class="header-right">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="搜索项目或任务..." id="searchInput" oninput="handleSearch(this.value)">
+                </div>
+                <button class="btn btn-primary" onclick="openModal('createProjectModal')">
+                    <i class="fas fa-plus"></i> 新建项目
+                </button>
+                <div class="notification-bell">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="notificationBadge">3</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 仪表盘 -->
+        <section class="section active" id="section-dashboard">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon bg-blue">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="totalProjects">0</h3>
+                        <p>总项目数</p>
+                    </div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i> 12%
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-green">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="completedTasks">0</h3>
+                        <p>已完成任务</p>
+                    </div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i> 8%
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-orange">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="inProgressTasks">0</h3>
+                        <p>进行中任务</p>
+                    </div>
+                    <div class="stat-trend down">
+                        <i class="fas fa-arrow-down"></i> 3%
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon bg-red">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="overdueTasks">0</h3>
+                        <p>逾期任务</p>
+                    </div>
+                    <div class="stat-trend down">
+                        <i class="fas fa-arrow-down"></i> 5%
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- 项目进度 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>项目进度</h2>
+                        <button class="btn btn-sm" onclick="showSection('projects')">查看全部</button>
+                    </div>
+                    <div class="project-progress-list" id="projectProgressList"></div>
+                </div>
+
+                <!-- 最近任务 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>最近任务</h2>
+                        <button class="btn btn-sm" onclick="showSection('tasks')">查看全部</button>
+                    </div>
+                    <div class="recent-tasks" id="recentTasksList"></div>
+                </div>
+
+                <!-- 团队活动 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>团队活动</h2>
+                    </div>
+                    <div class="activity-list" id="activityList"></div>
+                </div>
+
+                <!-- 任务状态图 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>任务状态分布</h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="taskStatusChart"></canvas>
+                        <div class="chart-legend" id="chartLegend"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 项目列表 -->
+        <section class="section" id="section-projects">
+            <div class="section-toolbar">
+                <div class="filter-group">
+                    <select class="form-select" onchange="filterProjects(this.value)">
+                        <option value="all">所有状态</option>
+                        <option value="active">进行中</option>
+                        <option value="completed">已完成</option>
+                        <option value="paused">已暂停</option>
+                    </select>
+                    <select class="form-select" onchange="sortProjects(this.value)">
+                        <option value="date">按日期排序</option>
+                        <option value="name">按名称排序</option>
+                        <option value="progress">按进度排序</option>
+                    </select>
+                </div>
+                <div class="view-toggle">
+                    <button class="btn btn-icon active" onclick="toggleView('grid', this)" title="网格视图">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="toggleView('list', this)" title="列表视图">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="projects-container grid-view" id="projectsContainer"></div>
+        </section>
+
+        <!-- 任务管理 -->
+        <section class="section" id="section-tasks">
+            <div class="section-toolbar">
+                <div class="filter-group">
+                    <select class="form-select" id="taskProjectFilter" onchange="filterTasks()">
+                        <option value="all">所有项目</option>
+                    </select>
+                    <select class="form-select" id="taskStatusFilter" onchange="filterTasks()">
+                        <option value="all">所有状态</option>
+                        <option value="todo">待办</option>
+                        <option value="inprogress">进行中</option>
+                        <option value="done">已完成</option>
+                    </select>
+                    <select class="form-select" id="taskPriorityFilter" onchange="filterTasks()">
+                        <option value="all">所有优先级</option>
+                        <option value="high">高</option>
+                        <option value="medium">中</option>
+                        <option value="low">低</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="openModal('createTaskModal')">
+                    <i class="fas fa-plus"></i> 新建任务
+                </button>
+            </div>
+            <!-- 看板视图 -->
+            <div class="kanban-board" id="kanbanBoard">
+                <div class="kanban-column" id="col-todo">
+                    <div class="kanban-header">
+                        <span class="status-dot todo"></span>
+                        <h3>待办</h3>
+                        <span class="task-count" id="count-todo">0</span>
+                    </div>
+                    <div class="kanban-tasks" id="tasks-todo" 
+                         ondragover="allowDrop(event)" 
+                         ondrop="drop(event, 'todo')"></div>
+                </div>
+                <div class="kanban-column" id="col-inprogress">
+                    <div class="kanban-header">
+                        <span class="status-dot inprogress"></span>
+                        <h3>进行中</h3>
+                        <span class="task-count" id="count-inprogress">0</span>
+                    </div>
+                    <div class="kanban-tasks" id="tasks-inprogress"
+                         ondragover="allowDrop(event)"
+                         ondrop="drop(event, 'inprogress')"></div>
+                </div>
+                <div class="kanban-column" id="col-done">
+                    <div class="kanban-header">
+                        <span class="status-dot done"></span>
+                        <h3>已完成</h3>
+                        <span class="task-count" id="count-done">0</span>
+                    </div>
+                    <div class="kanban-tasks" id="tasks-done"
+                         ondragover="allowDrop(event)"
+                         ondrop="drop(event, 'done')"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 团队成员 -->
+        <section class="section" id="section-team">
+            <div class="section-toolbar">
+                <button class="btn btn-primary" onclick="openModal('addMemberModal')">
+                    <i class="fas fa-user-plus"></i> 添加成员
+                </button>
+            </div>
+            <div class="team-grid" id="teamGrid"></div>
+        </section>
+
+        <!-- 日历视图 -->
+        <section class="section" id="section-calendar">
+            <div class="calendar-container">
+                <div class="calendar-header">
+                    <button class="btn btn-icon" onclick="changeMonth(-1)">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <h2 id="calendarTitle"></h2>
+                    <button class="btn btn-icon" onclick="changeMonth(1)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="calendar-grid">
+                    <div class="calendar-day-names">
+                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                    </div>
+                    <div class="calendar-days" id="calendarDays"></div>
+                </div>
+            </div>
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>本月截止任务</h2>
+                </div>
+                <div id="monthlyTasks"></div>
+            </div>
+        </section>
+
+        <!-- 报表分析 -->
+        <section class="section" id="section-reports">
+            <div class="reports-grid">
+                <div class="card">
+                    <div class="card-header"><h2>项目完成率</h2></div>
+                    <div class="chart-container">
+                        <canvas id="completionChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h2>团队工作量</h2></div>
+                    <div class="chart-container">
+                        <canvas id="workloadChart"></canvas>
+                    </div>
+                </div>
+                <div class="card full-width">
+                    <div class="card-header"><h2>月度任务趋势</h2></div>
+                    <div class="chart-container">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 创建项目模态框 -->
+    <div class="modal" id="createProjectModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>创建新项目</h2>
+                <button class="modal-close" onclick="closeModal('createProjectModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>项目名称 *</label>
+                    <input type="text" class="form-input" id="projectName" placeholder="输入项目名称">
+                </div>
+                <div class="form-group">
+                    <label>项目描述</label>
+                    <textarea class="form-input" id="projectDesc" placeholder="输入项目描述" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" class="form-input" id="projectStart">
+                    </div>
+                    <div class="form-group">
+                        <label>截止日期</label>
+                        <input type="date" class="form-input" id="projectEnd">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <select class="form-input" id="projectPriority">
+                            <option value="low">低</option>
+                            <option value="medium" selected>中</option>
+                            <option value="high">高</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>项目颜色</label>
+                        <input type="color" class="form-input" id="projectColor" value="#4f46e5">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createProjectModal')">取消</button>
+                <button class="btn btn-primary" onclick="createProject()">创建项目</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建任务模态框 -->
+    <div class="modal" id="createTaskModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>创建新任务</h2>
+                <button class="modal-close" onclick="closeModal('createTaskModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>任务名称 *</label>
+                    <input type="text" class="form-input" id="taskName" placeholder="输入任务名称">
+                </div>
+                <div class="form-group">
+                    <label>任务描述</label>
+                    <textarea class="form-input" id="taskDesc" placeholder="输入任务描述" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>所属项目</label>
+                        <select class="form-input" id="taskProject"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>负责人</label>
+                        <select class="form-input" id="taskAssignee"></select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <select class="form-input" id="taskPriority">
+                            <option value="low">低</option>
+                            <option value="medium" selected>中</option>
+                            <option value="high">高</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>截止日期</label>
+                        <input type="date" class="form-input" id="taskDue">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>预计工时(小时)</label>
+                    <input type="number" class="form-input" id="taskHours" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>标签</label>
+                    <input type="text" class="form-input" id="taskTags" placeholder="输入标签，用逗号分隔">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('createTaskModal')">取消</button>
+                <button class="btn btn-primary" onclick="createTask()">创建任务</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加成员模态框 -->
+    <div class="modal" id="addMemberModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>添加团队成员</h2>
+                <button class="modal-close" onclick="closeModal('addMemberModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>姓名 *</label>
+                    <input type="text" class="form-input" id="memberName" placeholder="输入成员姓名">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>职位</label>
+                        <input type="text" class="form-input" id="memberRole" placeholder="输入职位">
+                    </div>
+                    <div class="form-group">
+                        <label>邮箱</label>
+                        <input type="email" class="form-input" id="memberEmail" placeholder="输入邮箱">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>头像颜色</label>
+                    <input type="color" class="form-input" id="memberColor" value="#4f46e5">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addMemberModal')">取消</button>
+                <button class="btn btn-primary" onclick="addMember()">添加成员</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务详情模态框 -->
+    <div class="modal" id="taskDetailModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="taskDetailTitle">任务详情</h2>
+                <button class="modal-close" onclick="closeModal('taskDetailModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="taskDetailBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="deleteCurrentTask()">删除</button>
+                <button class="btn btn-primary" onclick="saveTaskDetail()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遮罩层 -->
+    <div class="overlay" id="overlay" onclick="closeAllModals()"></div>
+
+    <!-- Toast 通知 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
