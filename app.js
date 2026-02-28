@@ -4,6 +4,7 @@ const state = {
   tasks: [],
   members: [],
   activities: [],
+  notifications: [],
   currentSection: 'dashboard',
   currentDate: new Date(),
   currentTaskId: null,
@@ -12,175 +13,125 @@ const state = {
   projectView: 'grid',
 };
 
+const OVERLOAD_THRESHOLD = 4; // 活跃任务数超过此值视为负载过高
+let milestoneInputCount = 0;
+
 // ===== 示例数据 =====
 const sampleData = {
   projects: [
     {
-      id: 'p1',
-      name: '电商平台重构',
+      id: 'p1', name: '电商平台重构',
       description: '对现有电商平台进行全面技术重构，提升性能和用户体验',
-      startDate: '2026-01-01',
-      endDate: '2026-04-30',
-      priority: 'high',
-      color: '#4f46e5',
-      status: 'active',
-      members: ['m1', 'm2', 'm3'],
-      createdAt: '2026-01-01',
+      startDate: '2026-01-01', endDate: '2026-04-30',
+      priority: 'high', color: '#4f46e5', status: 'active',
+      members: ['m1', 'm2', 'm3'], createdAt: '2026-01-01',
+      milestones: [
+        { id: 'ms1', name: '需求分析完成', dueDate: '2026-01-31', completed: true },
+        { id: 'ms2', name: '前端原型上线', dueDate: '2026-03-01', completed: false },
+        { id: 'ms3', name: '全量发布', dueDate: '2026-04-30', completed: false },
+      ],
     },
     {
-      id: 'p2',
-      name: '移动端App开发',
+      id: 'p2', name: '移动端App开发',
       description: '开发iOS和Android双端原生应用',
-      startDate: '2026-01-15',
-      endDate: '2026-06-30',
-      priority: 'high',
-      color: '#22c55e',
-      status: 'active',
-      members: ['m2', 'm4'],
-      createdAt: '2026-01-15',
+      startDate: '2026-01-15', endDate: '2026-06-30',
+      priority: 'high', color: '#22c55e', status: 'active',
+      members: ['m2', 'm4'], createdAt: '2026-01-15',
+      milestones: [
+        { id: 'ms4', name: 'iOS Alpha版', dueDate: '2026-03-31', completed: false },
+        { id: 'ms5', name: 'Android Beta版', dueDate: '2026-05-31', completed: false },
+      ],
     },
     {
-      id: 'p3',
-      name: '数据分析平台',
+      id: 'p3', name: '数据分析平台',
       description: '建立企业级数据分析和可视化平台',
-      startDate: '2025-10-01',
-      endDate: '2026-01-31',
-      priority: 'medium',
-      color: '#f59e0b',
-      status: 'completed',
-      members: ['m1', 'm3'],
-      createdAt: '2025-10-01',
+      startDate: '2025-10-01', endDate: '2026-01-31',
+      priority: 'medium', color: '#f59e0b', status: 'completed',
+      members: ['m1', 'm3'], createdAt: '2025-10-01',
+      milestones: [
+        { id: 'ms6', name: '数据接入完成', dueDate: '2025-12-01', completed: true },
+        { id: 'ms7', name: '可视化上线', dueDate: '2026-01-31', completed: true },
+      ],
     },
     {
-      id: 'p4',
-      name: 'API网关升级',
+      id: 'p4', name: 'API网关升级',
       description: '升级API网关，增加限流、鉴权等功能',
-      startDate: '2026-02-01',
-      endDate: '2026-03-31',
-      priority: 'medium',
-      color: '#ef4444',
-      status: 'paused',
-      members: ['m2'],
-      createdAt: '2026-02-01',
+      startDate: '2026-02-01', endDate: '2026-03-31',
+      priority: 'medium', color: '#ef4444', status: 'paused',
+      members: ['m2'], createdAt: '2026-02-01',
+      milestones: [],
     },
   ],
   tasks: [
     {
-      id: 't1',
-      name: '设计首页UI原型',
+      id: 't1', name: '设计首页UI原型',
       description: '使用Figma设计首页交互原型，包含桌面端和移动端适配方案',
-      projectId: 'p1',
-      assigneeId: 'm3',
-      priority: 'high',
-      status: 'done',
-      dueDate: '2026-02-10',
-      estimatedHours: 16,
-      tags: ['设计', 'UI'],
-      createdAt: '2026-01-05',
+      projectId: 'p1', assigneeId: 'm3', priority: 'high', status: 'done',
+      dueDate: '2026-02-10', estimatedHours: 16, tags: ['设计', 'UI'],
+      createdAt: '2026-01-05', dependsOn: null,
+      comments: [
+        { id: 'c1', memberId: 'm1', text: '原型图非常清晰，可以直接进入开发阶段', timestamp: '2026-02-08 14:30' },
+        { id: 'c2', memberId: 'm3', text: '感谢反馈，移动端适配部分已优化', timestamp: '2026-02-09 09:15' },
+      ],
     },
     {
-      id: 't2',
-      name: '实现用户认证模块',
+      id: 't2', name: '实现用户认证模块',
       description: '基于JWT实现登录、注册、权限管理功能',
-      projectId: 'p1',
-      assigneeId: 'm1',
-      priority: 'high',
-      status: 'done',
-      dueDate: '2026-02-15',
-      estimatedHours: 24,
-      tags: ['后端', '安全'],
-      createdAt: '2026-01-08',
+      projectId: 'p1', assigneeId: 'm1', priority: 'high', status: 'done',
+      dueDate: '2026-02-15', estimatedHours: 24, tags: ['后端', '安全'],
+      createdAt: '2026-01-08', dependsOn: null, comments: [],
     },
     {
-      id: 't3',
-      name: '商品列表页开发',
+      id: 't3', name: '商品列表页开发',
       description: '开发商品筛选、排序、分页功能',
-      projectId: 'p1',
-      assigneeId: 'm2',
-      priority: 'medium',
-      status: 'inprogress',
-      dueDate: '2026-03-01',
-      estimatedHours: 20,
-      tags: ['前端'],
-      createdAt: '2026-01-20',
+      projectId: 'p1', assigneeId: 'm2', priority: 'medium', status: 'inprogress',
+      dueDate: '2026-03-01', estimatedHours: 20, tags: ['前端'],
+      createdAt: '2026-01-20', dependsOn: 't1',
+      comments: [
+        { id: 'c3', memberId: 'm2', text: '筛选功能已完成，分页正在开发中', timestamp: '2026-02-20 16:00' },
+      ],
     },
     {
-      id: 't4',
-      name: '购物车功能实现',
+      id: 't4', name: '购物车功能实现',
       description: '实现添加商品、数量修改、价格计算等购物车核心功能',
-      projectId: 'p1',
-      assigneeId: 'm1',
-      priority: 'high',
-      status: 'inprogress',
-      dueDate: '2026-03-10',
-      estimatedHours: 32,
-      tags: ['前端', '后端'],
-      createdAt: '2026-02-01',
+      projectId: 'p1', assigneeId: 'm1', priority: 'high', status: 'inprogress',
+      dueDate: '2026-03-10', estimatedHours: 32, tags: ['前端', '后端'],
+      createdAt: '2026-02-01', dependsOn: 't3', comments: [],
     },
     {
-      id: 't5',
-      name: 'App启动页设计',
+      id: 't5', name: 'App启动页设计',
       description: '设计App启动页和引导页',
-      projectId: 'p2',
-      assigneeId: 'm3',
-      priority: 'low',
-      status: 'done',
-      dueDate: '2026-02-05',
-      estimatedHours: 8,
-      tags: ['设计', '移动端'],
-      createdAt: '2026-01-16',
+      projectId: 'p2', assigneeId: 'm3', priority: 'low', status: 'done',
+      dueDate: '2026-02-05', estimatedHours: 8, tags: ['设计', '移动端'],
+      createdAt: '2026-01-16', dependsOn: null, comments: [],
     },
     {
-      id: 't6',
-      name: 'iOS登录模块',
+      id: 't6', name: 'iOS登录模块',
       description: '实现iOS端用户登录和注册功能',
-      projectId: 'p2',
-      assigneeId: 'm4',
-      priority: 'high',
-      status: 'inprogress',
-      dueDate: '2026-03-20',
-      estimatedHours: 28,
-      tags: ['iOS', 'Swift'],
-      createdAt: '2026-02-10',
+      projectId: 'p2', assigneeId: 'm4', priority: 'high', status: 'inprogress',
+      dueDate: '2026-03-20', estimatedHours: 28, tags: ['iOS', 'Swift'],
+      createdAt: '2026-02-10', dependsOn: 't5', comments: [],
     },
     {
-      id: 't7',
-      name: '数据报表导出',
+      id: 't7', name: '数据报表导出',
       description: '支持将报表数据导出为Excel和PDF格式',
-      projectId: 'p3',
-      assigneeId: 'm1',
-      priority: 'medium',
-      status: 'done',
-      dueDate: '2026-01-20',
-      estimatedHours: 16,
-      tags: ['后端', '数据'],
-      createdAt: '2025-12-01',
+      projectId: 'p3', assigneeId: 'm1', priority: 'medium', status: 'done',
+      dueDate: '2026-01-20', estimatedHours: 16, tags: ['后端', '数据'],
+      createdAt: '2025-12-01', dependsOn: null, comments: [],
     },
     {
-      id: 't8',
-      name: '支付接口集成',
+      id: 't8', name: '支付接口集成',
       description: '集成支付宝和微信支付接口',
-      projectId: 'p1',
-      assigneeId: 'm2',
-      priority: 'high',
-      status: 'todo',
-      dueDate: '2026-03-25',
-      estimatedHours: 20,
-      tags: ['后端', '支付'],
-      createdAt: '2026-02-15',
+      projectId: 'p1', assigneeId: 'm2', priority: 'high', status: 'todo',
+      dueDate: '2026-03-25', estimatedHours: 20, tags: ['后端', '支付'],
+      createdAt: '2026-02-15', dependsOn: 't2', comments: [],
     },
     {
-      id: 't9',
-      name: '性能优化测试',
+      id: 't9', name: '性能优化测试',
       description: '对平台进行压力测试和性能优化',
-      projectId: 'p1',
-      assigneeId: 'm2',
-      priority: 'medium',
-      status: 'todo',
-      dueDate: '2026-04-10',
-      estimatedHours: 24,
-      tags: ['测试', '性能'],
-      createdAt: '2026-02-20',
+      projectId: 'p1', assigneeId: 'm2', priority: 'medium', status: 'todo',
+      dueDate: '2026-04-10', estimatedHours: 24, tags: ['测试', '性能'],
+      createdAt: '2026-02-20', dependsOn: 't8', comments: [],
     },
   ],
   members: [
@@ -198,7 +149,7 @@ const sampleData = {
   ],
 };
 
-// ===== LocalStorage 持久化 =====
+// ===== LocalStorage =====
 function saveData() {
   localStorage.setItem('pm_projects', JSON.stringify(state.projects));
   localStorage.setItem('pm_tasks', JSON.stringify(state.tasks));
@@ -207,12 +158,18 @@ function saveData() {
 }
 
 function loadData() {
-  const projects = localStorage.getItem('pm_projects');
-  if (projects) {
-    state.projects = JSON.parse(projects);
+  const raw = localStorage.getItem('pm_projects');
+  if (raw) {
+    state.projects = JSON.parse(raw);
     state.tasks = JSON.parse(localStorage.getItem('pm_tasks') || '[]');
     state.members = JSON.parse(localStorage.getItem('pm_members') || '[]');
     state.activities = JSON.parse(localStorage.getItem('pm_activities') || '[]');
+    // 向前兼容：补齐缺失字段
+    state.projects.forEach(p => { if (!p.milestones) p.milestones = []; });
+    state.tasks.forEach(t => {
+      if (!t.comments) t.comments = [];
+      if (t.dependsOn === undefined) t.dependsOn = null;
+    });
   } else {
     state.projects = sampleData.projects;
     state.tasks = sampleData.tasks;
@@ -222,9 +179,290 @@ function loadData() {
   }
 }
 
-// ===== ID 生成器 =====
 function genId(prefix) {
   return prefix + Date.now() + Math.random().toString(36).slice(2, 6);
+}
+
+// ===== P0: 表单内联校验 =====
+function showFieldError(fieldId, msg) {
+  clearFieldError(fieldId);
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  el.classList.add('input-error');
+  const err = document.createElement('div');
+  err.className = 'field-error';
+  err.id = fieldId + '-err';
+  err.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${msg}`;
+  el.parentNode.appendChild(err);
+}
+
+function clearFieldError(fieldId) {
+  const el = document.getElementById(fieldId);
+  if (el) el.classList.remove('input-error');
+  const err = document.getElementById(fieldId + '-err');
+  if (err) err.remove();
+}
+
+function clearAllErrors() {
+  document.querySelectorAll('.field-error').forEach(e => e.remove());
+  document.querySelectorAll('.input-error').forEach(e => e.classList.remove('input-error'));
+}
+
+function validateField(fieldId, label) {
+  const el = document.getElementById(fieldId);
+  if (!el || !el.value.trim()) {
+    showFieldError(fieldId, `${label}不能为空`);
+    return false;
+  }
+  clearFieldError(fieldId);
+  return true;
+}
+
+// ===== P0: 触控拖拽 =====
+let touchTaskId = null;
+let touchGhost = null;
+
+function setupTouchDrag() {
+  document.addEventListener('touchstart', (e) => {
+    const card = e.target.closest('.kanban-task-card');
+    if (!card) return;
+    touchTaskId = card.dataset.taskId;
+    touchGhost = card.cloneNode(true);
+    touchGhost.style.cssText = `position:fixed;opacity:0.8;pointer-events:none;z-index:9999;width:${card.offsetWidth}px;box-shadow:var(--shadow-lg);transform:rotate(2deg);`;
+    document.body.appendChild(touchGhost);
+    moveTouchGhost(e.touches[0]);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!touchGhost) return;
+    e.preventDefault();
+    moveTouchGhost(e.touches[0]);
+  }, { passive: false });
+
+  document.addEventListener('touchend', (e) => {
+    if (!touchGhost || !touchTaskId) return;
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const col = el ? el.closest('.kanban-tasks') : null;
+    if (col) {
+      const newStatus = col.id.replace('tasks-', '');
+      const task = state.tasks.find(t => t.id === touchTaskId);
+      if (task && task.status !== newStatus) {
+        task.status = newStatus;
+        addActivity('m1', '移动了任务', task.name);
+        saveData();
+        renderKanban();
+        showToast('任务状态已更新', 'info');
+      }
+    }
+    touchGhost.remove();
+    touchGhost = null;
+    touchTaskId = null;
+  });
+}
+
+function moveTouchGhost(touch) {
+  if (!touchGhost) return;
+  touchGhost.style.left = (touch.clientX - 20) + 'px';
+  touchGhost.style.top = (touch.clientY - 30) + 'px';
+}
+
+// ===== P1: 通知系统 =====
+function generateNotifications() {
+  state.notifications = [];
+  const now = new Date();
+  const soon = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+  state.tasks.filter(t => isOverdue(t)).forEach(t => {
+    state.notifications.push({
+      id: genId('n'), type: 'danger', icon: 'fa-exclamation-circle',
+      text: `任务 "<strong>${t.name}</strong>" 已逾期，请及时处理`,
+      time: '刚刚', read: false, taskId: t.id,
+    });
+  });
+
+  state.tasks.filter(t => {
+    if (!t.dueDate || t.status === 'done') return false;
+    const d = new Date(t.dueDate);
+    return d > now && d <= soon;
+  }).forEach(t => {
+    state.notifications.push({
+      id: genId('n'), type: 'warning', icon: 'fa-clock',
+      text: `任务 "<strong>${t.name}</strong>" 将于 ${formatDate(t.dueDate)} 截止`,
+      time: '今天', read: false, taskId: t.id,
+    });
+  });
+
+  // 里程碑预警
+  state.projects.forEach(p => {
+    (p.milestones || []).filter(ms => !ms.completed && ms.dueDate && new Date(ms.dueDate) <= soon).forEach(ms => {
+      state.notifications.push({
+        id: genId('n'), type: 'info', icon: 'fa-flag',
+        text: `项目 "<strong>${p.name}</strong>" 里程碑 "${ms.name}" 即将到期`,
+        time: '今天', read: false,
+      });
+    });
+  });
+
+  updateNotificationBadge();
+  renderNotifications();
+}
+
+function updateNotificationBadge() {
+  const unread = state.notifications.filter(n => !n.read).length;
+  const badge = document.getElementById('notificationBadge');
+  if (unread > 0) {
+    badge.textContent = unread > 9 ? '9+' : unread;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderNotifications() {
+  const list = document.getElementById('notificationList');
+  if (!state.notifications.length) {
+    list.innerHTML = '<div class="notif-empty"><i class="fas fa-check-circle" style="color:var(--success);margin-right:0.35rem"></i>暂无新通知</div>';
+    return;
+  }
+  list.innerHTML = state.notifications.map(n => `
+    <div class="notification-item ${n.read ? '' : 'unread'}" onclick="onNotifClick('${n.id}', '${n.taskId || ''}')">
+      <div class="notif-icon ${n.type}"><i class="fas ${n.icon}"></i></div>
+      <div class="notif-body">
+        <p>${n.text}</p>
+        <div class="notif-time">${n.time}</div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleNotifications(e) {
+  e.stopPropagation();
+  document.getElementById('notificationDropdown').classList.toggle('open');
+}
+
+function markAllRead(e) {
+  e.stopPropagation();
+  state.notifications.forEach(n => n.read = true);
+  updateNotificationBadge();
+  renderNotifications();
+}
+
+function onNotifClick(nId, taskId) {
+  const notif = state.notifications.find(n => n.id === nId);
+  if (notif) notif.read = true;
+  updateNotificationBadge();
+  renderNotifications();
+  document.getElementById('notificationDropdown').classList.remove('open');
+  if (taskId) openTaskDetail(taskId);
+}
+
+// ===== P2: 里程碑 =====
+function addMilestoneInput() {
+  milestoneInputCount++;
+  const container = document.getElementById('milestoneInputs');
+  const row = document.createElement('div');
+  row.className = 'milestone-input-row';
+  row.id = `msRow${milestoneInputCount}`;
+  row.innerHTML = `
+    <input type="text" class="form-input" placeholder="里程碑名称" id="msName${milestoneInputCount}">
+    <input type="date" class="form-input" id="msDate${milestoneInputCount}">
+    <button type="button" class="btn btn-icon" onclick="removeMilestoneRow(${milestoneInputCount})" title="删除">
+      <i class="fas fa-times"></i>
+    </button>`;
+  container.appendChild(row);
+}
+
+function removeMilestoneRow(i) {
+  const row = document.getElementById(`msRow${i}`);
+  if (row) row.remove();
+}
+
+function collectMilestones() {
+  const milestones = [];
+  document.querySelectorAll('[id^="msRow"]').forEach(row => {
+    const i = row.id.replace('msRow', '');
+    const nameEl = document.getElementById(`msName${i}`);
+    const dateEl = document.getElementById(`msDate${i}`);
+    if (nameEl && nameEl.value.trim()) {
+      milestones.push({ id: genId('ms'), name: nameEl.value.trim(), dueDate: dateEl ? dateEl.value : '', completed: false });
+    }
+  });
+  return milestones;
+}
+
+function toggleMilestone(projectId, msId) {
+  const project = getProject(projectId);
+  if (!project) return;
+  const ms = project.milestones.find(m => m.id === msId);
+  if (!ms) return;
+  ms.completed = !ms.completed;
+  saveData();
+  if (state.currentSection === 'projects') renderProjects();
+  showToast(ms.completed ? `里程碑 "${ms.name}" 已完成` : `里程碑 "${ms.name}" 已重置`);
+}
+
+function renderMilestones(project) {
+  if (!project.milestones || !project.milestones.length) return '';
+  const today = new Date().toISOString().split('T')[0];
+  return `<div style="margin-top:0.75rem;border-top:1px solid var(--border);padding-top:0.75rem">
+    <div style="font-size:0.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.5rem">
+      <i class="fas fa-flag" style="margin-right:0.3rem"></i>里程碑
+    </div>
+    ${project.milestones.map(ms => {
+      const overdue = !ms.completed && ms.dueDate && ms.dueDate < today;
+      return `<div class="milestone-item">
+        <div class="ms-check ${ms.completed ? 'done' : ''}" onclick="event.stopPropagation();toggleMilestone('${project.id}','${ms.id}')">
+          ${ms.completed ? '<i class="fas fa-check"></i>' : ''}
+        </div>
+        <span class="ms-name ${ms.completed ? 'done' : ''}">${ms.name}</span>
+        <span class="ms-due ${overdue ? 'overdue' : ''}">${ms.dueDate || '-'}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ===== P2: CSV 导出 =====
+function downloadCSV(filename, rows) {
+  const content = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${filename} 已导出`);
+}
+
+function exportTasksCSV() {
+  const headers = ['任务名称', '项目', '负责人', '优先级', '状态', '截止日期', '预计工时(h)', '标签'];
+  const pLabels = { low: '低', medium: '中', high: '高' };
+  const sLabels = { todo: '待办', inprogress: '进行中', done: '已完成' };
+  const rows = state.tasks.map(t => [
+    t.name,
+    getProject(t.projectId)?.name || '-',
+    getMember(t.assigneeId)?.name || '未分配',
+    pLabels[t.priority] || t.priority,
+    sLabels[t.status] || t.status,
+    t.dueDate || '-',
+    t.estimatedHours || 0,
+    (t.tags || []).join('|'),
+  ]);
+  downloadCSV('tasks.csv', [headers, ...rows]);
+}
+
+function exportProjectsCSV() {
+  const headers = ['项目名称', '描述', '状态', '优先级', '开始日期', '截止日期', '进度(%)', '成员数', '任务数'];
+  const pLabels = { low: '低', medium: '中', high: '高' };
+  const sLabels = { active: '进行中', completed: '已完成', paused: '已暂停' };
+  const rows = state.projects.map(p => [
+    p.name, p.description,
+    sLabels[p.status] || p.status,
+    pLabels[p.priority] || p.priority,
+    p.startDate || '-', p.endDate || '-',
+    calcProjectProgress(p.id),
+    (p.members || []).length,
+    state.tasks.filter(t => t.projectId === p.id).length,
+  ]);
+  downloadCSV('projects.csv', [headers, ...rows]);
 }
 
 // ===== 导航 =====
@@ -232,18 +470,13 @@ function showSection(section) {
   state.currentSection = section;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + section).classList.add('active');
-
   const navItems = document.querySelectorAll('.nav-item');
   const sectionMap = { dashboard: 0, projects: 1, tasks: 2, team: 3, calendar: 4, reports: 5 };
   navItems.forEach(item => item.classList.remove('active'));
   if (sectionMap[section] !== undefined) navItems[sectionMap[section]].classList.add('active');
-
-  const titleMap = {
-    dashboard: '仪表盘', projects: '项目列表', tasks: '任务管理',
-    team: '团队成员', calendar: '日历视图', reports: '报表分析',
-  };
+  const titleMap = { dashboard: '仪表盘', projects: '项目列表', tasks: '任务管理', team: '团队成员', calendar: '日历视图', reports: '报表分析' };
   document.getElementById('pageTitle').textContent = titleMap[section] || '';
-
+  document.getElementById('notificationDropdown').classList.remove('open');
   if (section === 'dashboard') renderDashboard();
   if (section === 'projects') renderProjects();
   if (section === 'tasks') renderKanban();
@@ -258,9 +491,11 @@ function toggleSidebar() {
 
 // ===== 模态框 =====
 function openModal(id) {
+  clearAllErrors();
   document.getElementById(id).classList.add('active');
   document.getElementById('overlay').classList.add('active');
   if (id === 'createTaskModal') populateTaskForm();
+  if (id === 'createProjectModal') { milestoneInputCount = 0; document.getElementById('milestoneInputs').innerHTML = ''; }
 }
 
 function closeModal(id) {
@@ -272,16 +507,16 @@ function closeModal(id) {
 function closeAllModals() {
   document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
   document.getElementById('overlay').classList.remove('active');
+  document.getElementById('notificationDropdown').classList.remove('open');
 }
 
-// ===== Toast 通知 =====
+// ===== Toast =====
 function showToast(message, type = 'success') {
   const iconMap = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
-  const container = document.getElementById('toastContainer');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `<i class="fas ${iconMap[type]}"></i><span class="toast-message">${message}</span>`;
-  container.appendChild(toast);
+  toast.innerHTML = `<i class="fas ${iconMap[type] || 'fa-info-circle'}"></i><span class="toast-message">${message}</span>`;
+  document.getElementById('toastContainer').appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
 
@@ -302,7 +537,7 @@ function isOverdue(task) {
 
 function calcProjectProgress(projectId) {
   const tasks = state.tasks.filter(t => t.projectId === projectId);
-  if (tasks.length === 0) return 0;
+  if (!tasks.length) return 0;
   return Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100);
 }
 
@@ -323,7 +558,6 @@ function renderDashboard() {
   document.getElementById('completedTasks').textContent = state.tasks.filter(t => t.status === 'done').length;
   document.getElementById('inProgressTasks').textContent = state.tasks.filter(t => t.status === 'inprogress').length;
   document.getElementById('overdueTasks').textContent = state.tasks.filter(t => isOverdue(t)).length;
-
   renderProjectProgress();
   renderRecentTasks();
   renderActivityList();
@@ -331,35 +565,26 @@ function renderDashboard() {
 }
 
 function renderProjectProgress() {
-  const list = document.getElementById('projectProgressList');
-  list.innerHTML = state.projects.slice(0, 5).map(p => {
+  document.getElementById('projectProgressList').innerHTML = state.projects.slice(0, 5).map(p => {
     const progress = calcProjectProgress(p.id);
-    return `
-      <div class="project-progress-item">
-        <div class="project-color-dot" style="background:${p.color}"></div>
-        <div class="project-progress-info">
-          <h4>${p.name}</h4>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width:${progress}%;background:${p.color}"></div>
-          </div>
-        </div>
-        <span class="progress-text">${progress}%</span>
-      </div>`;
+    return `<div class="project-progress-item">
+      <div class="project-color-dot" style="background:${p.color}"></div>
+      <div class="project-progress-info">
+        <h4>${p.name}</h4>
+        <div class="progress-bar"><div class="progress-fill" style="width:${progress}%;background:${p.color}"></div></div>
+      </div>
+      <span class="progress-text">${progress}%</span>
+    </div>`;
   }).join('');
 }
 
 function renderRecentTasks() {
   const statusLabels = { todo: '待办', inprogress: '进行中', done: '已完成' };
-  const tasks = [...state.tasks]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 5);
+  const tasks = [...state.tasks].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
   document.getElementById('recentTasksList').innerHTML = tasks.map(t => `
     <div class="recent-task-item" onclick="openTaskDetail('${t.id}')">
       <div class="task-priority-dot priority-${t.priority}"></div>
-      <div class="recent-task-info">
-        <h4>${t.name}</h4>
-        <span>${formatDate(t.dueDate)}</span>
-      </div>
+      <div class="recent-task-info"><h4>${t.name}</h4><span>${formatDate(t.dueDate)}</span></div>
       <span class="task-status-badge status-${t.status}">${statusLabels[t.status]}</span>
     </div>`).join('');
 }
@@ -368,14 +593,13 @@ function renderActivityList() {
   document.getElementById('activityList').innerHTML = state.activities.slice(0, 5).map(a => {
     const m = getMember(a.memberId);
     if (!m) return '';
-    return `
-      <div class="activity-item">
-        <div class="activity-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
-        <div class="activity-content">
-          <p><strong>${m.name}</strong> ${a.action} <strong>${a.target}</strong></p>
-          <span class="activity-time">${a.time}</span>
-        </div>
-      </div>`;
+    return `<div class="activity-item">
+      <div class="activity-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+      <div class="activity-content">
+        <p><strong>${m.name}</strong> ${a.action} <strong>${a.target}</strong></p>
+        <span class="activity-time">${a.time}</span>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -387,51 +611,36 @@ function renderTaskStatusChart() {
     inprogress: state.tasks.filter(t => t.status === 'inprogress').length,
     done: state.tasks.filter(t => t.status === 'done').length,
   };
-
   if (taskStatusChartInst) taskStatusChartInst.destroy();
   taskStatusChartInst = new Chart(ctx, {
     type: 'doughnut',
-    data: {
-      labels: ['待办', '进行中', '已完成'],
-      datasets: [{ data: [counts.todo, counts.inprogress, counts.done], backgroundColor: ['#f59e0b', '#4f46e5', '#22c55e'], borderWidth: 0 }],
-    },
+    data: { labels: ['待办', '进行中', '已完成'], datasets: [{ data: [counts.todo, counts.inprogress, counts.done], backgroundColor: ['#f59e0b', '#4f46e5', '#22c55e'], borderWidth: 0 }] },
     options: { responsive: true, plugins: { legend: { display: false } }, cutout: '70%' },
   });
-
   document.getElementById('chartLegend').innerHTML = [
     { label: '待办', color: '#f59e0b', count: counts.todo },
     { label: '进行中', color: '#4f46e5', count: counts.inprogress },
     { label: '已完成', color: '#22c55e', count: counts.done },
-  ].map(item => `
-    <div class="legend-item">
-      <div class="legend-dot" style="background:${item.color}"></div>
-      ${item.label} (${item.count})
-    </div>`).join('');
+  ].map(item => `<div class="legend-item"><div class="legend-dot" style="background:${item.color}"></div>${item.label} (${item.count})</div>`).join('');
 }
 
 // ===== 项目列表 =====
 function renderProjects() {
   populateTaskProjectFilter();
   let projects = [...state.projects];
-
-  if (state.projectFilter !== 'all') {
-    projects = projects.filter(p => p.status === state.projectFilter);
-  }
-  if (state.projectSort === 'name') {
-    projects.sort((a, b) => a.name.localeCompare(b.name));
-  } else if (state.projectSort === 'progress') {
-    projects.sort((a, b) => calcProjectProgress(b.id) - calcProjectProgress(a.id));
-  } else {
-    projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }
+  if (state.projectFilter !== 'all') projects = projects.filter(p => p.status === state.projectFilter);
+  if (state.projectSort === 'name') projects.sort((a, b) => a.name.localeCompare(b.name));
+  else if (state.projectSort === 'progress') projects.sort((a, b) => calcProjectProgress(b.id) - calcProjectProgress(a.id));
+  else projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   const statusLabels = { active: '进行中', completed: '已完成', paused: '已暂停' };
   const priorityLabels = { low: '低', medium: '中', high: '高' };
-  const container = document.getElementById('projectsContainer');
 
-  container.innerHTML = projects.map(p => {
+  document.getElementById('projectsContainer').innerHTML = projects.map(p => {
     const progress = calcProjectProgress(p.id);
     const taskCount = state.tasks.filter(t => t.projectId === p.id).length;
+    const doneMs = (p.milestones || []).filter(ms => ms.completed).length;
+    const totalMs = (p.milestones || []).length;
     const membersHtml = (p.members || []).slice(0, 4).map(mid => {
       const m = getMember(mid);
       return m ? `<div class="project-member-avatar" style="background:${m.color}" title="${m.name}">${getInitials(m.name)}</div>` : '';
@@ -446,8 +655,9 @@ function renderProjects() {
           <p>${p.description}</p>
           <div class="project-meta">
             <span><i class="fas fa-calendar"></i> ${formatDate(p.endDate)}</span>
-            <span><i class="fas fa-tasks"></i> ${taskCount} 个任务</span>
+            <span><i class="fas fa-tasks"></i> ${taskCount} 任务</span>
             <span><i class="fas fa-flag"></i> ${priorityLabels[p.priority]}</span>
+            ${totalMs > 0 ? `<span><i class="fas fa-map-marker-alt"></i> ${doneMs}/${totalMs} 里程碑</span>` : ''}
           </div>
         </div>
         <div class="project-card-footer">
@@ -459,19 +669,13 @@ function renderProjects() {
             <span style="font-size:0.75rem;color:var(--text-secondary)">${progress}%</span>
           </div>
         </div>
+        ${renderMilestones(p)}
       </div>`;
   }).join('') || '<div style="padding:2rem;text-align:center;color:var(--text-light)">暂无项目，点击"新建项目"开始</div>';
 }
 
-function filterProjects(value) {
-  state.projectFilter = value;
-  renderProjects();
-}
-
-function sortProjects(value) {
-  state.projectSort = value;
-  renderProjects();
-}
+function filterProjects(value) { state.projectFilter = value; renderProjects(); }
+function sortProjects(value) { state.projectSort = value; renderProjects(); }
 
 function toggleView(viewType, btn) {
   state.projectView = viewType;
@@ -481,12 +685,10 @@ function toggleView(viewType, btn) {
 }
 
 function createProject() {
-  const name = document.getElementById('projectName').value.trim();
-  if (!name) { showToast('请输入项目名称', 'error'); return; }
-
+  if (!validateField('projectName', '项目名称')) return;
   const project = {
     id: genId('p'),
-    name,
+    name: document.getElementById('projectName').value.trim(),
     description: document.getElementById('projectDesc').value.trim(),
     startDate: document.getElementById('projectStart').value,
     endDate: document.getElementById('projectEnd').value,
@@ -495,22 +697,35 @@ function createProject() {
     status: 'active',
     members: [],
     createdAt: new Date().toISOString().split('T')[0],
+    milestones: collectMilestones(),
   };
-
   state.projects.unshift(project);
   addActivity('m1', '创建了项目', project.name);
   saveData();
+  generateNotifications();
   closeModal('createProjectModal');
   clearForm(['projectName', 'projectDesc', 'projectStart', 'projectEnd']);
-  showToast(`项目 "${name}" 创建成功`);
+  showToast(`项目 "${project.name}" 创建成功`);
   if (state.currentSection === 'projects') renderProjects();
   if (state.currentSection === 'dashboard') renderDashboard();
 }
 
 // ===== 任务管理 =====
 function populateTaskForm() {
-  document.getElementById('taskProject').innerHTML = state.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  document.getElementById('taskAssignee').innerHTML = `<option value="">未分配</option>` + state.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+  const projSelect = document.getElementById('taskProject');
+  projSelect.innerHTML = state.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  projSelect.onchange = onTaskProjectChange;
+  onTaskProjectChange();
+}
+
+function onTaskProjectChange() {
+  const projectId = document.getElementById('taskProject').value;
+  const project = getProject(projectId);
+  const members = (project && project.members.length > 0)
+    ? project.members.map(id => getMember(id)).filter(Boolean)
+    : state.members;
+  document.getElementById('taskAssignee').innerHTML =
+    `<option value="">未分配</option>` + members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 }
 
 function populateTaskProjectFilter() {
@@ -524,15 +739,12 @@ function renderKanban() {
   const projFilter = document.getElementById('taskProjectFilter').value;
   const statusFilter = document.getElementById('taskStatusFilter').value;
   const priorityFilter = document.getElementById('taskPriorityFilter').value;
-
   let tasks = [...state.tasks];
   if (projFilter !== 'all') tasks = tasks.filter(t => t.projectId === projFilter);
   if (statusFilter !== 'all') tasks = tasks.filter(t => t.status === statusFilter);
   if (priorityFilter !== 'all') tasks = tasks.filter(t => t.priority === priorityFilter);
-
   const columns = { todo: [], inprogress: [], done: [] };
   tasks.forEach(t => { if (columns[t.status]) columns[t.status].push(t); });
-
   Object.keys(columns).forEach(status => {
     document.getElementById(`count-${status}`).textContent = columns[status].length;
     document.getElementById(`tasks-${status}`).innerHTML = columns[status].map(renderTaskCard).join('');
@@ -542,35 +754,47 @@ function renderKanban() {
 function renderTaskCard(task) {
   const member = getMember(task.assigneeId);
   const project = getProject(task.projectId);
-  const tagsHtml = (task.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('');
   const overdue = isOverdue(task);
-  return `
-    <div class="kanban-task-card"
-         draggable="true"
-         ondragstart="drag(event, '${task.id}')"
-         onclick="openTaskDetail('${task.id}')">
-      ${tagsHtml ? `<div class="kanban-task-tags">${tagsHtml}</div>` : ''}
-      <div class="kanban-task-title">${task.name}</div>
-      <div class="kanban-task-meta">
-        <span style="color:${overdue ? 'var(--danger)' : 'inherit'}">
-          <i class="fas fa-calendar-alt"></i> ${formatDate(task.dueDate)}
-        </span>
-        ${member ? `<div class="kanban-task-assignee" style="background:${member.color}" title="${member.name}">${getInitials(member.name)}</div>` : ''}
-      </div>
-      ${project ? `<div style="margin-top:0.35rem;font-size:0.7rem;color:var(--text-light)"><i class="fas fa-folder"></i> ${project.name}</div>` : ''}
-    </div>`;
+  const tagsHtml = (task.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('');
+
+  // P1: 检查依赖是否未完成
+  let depWarn = '';
+  if (task.dependsOn) {
+    const dep = state.tasks.find(t => t.id === task.dependsOn);
+    if (dep && dep.status !== 'done') {
+      depWarn = `<div class="dep-warning"><i class="fas fa-exclamation-triangle"></i>依赖 "${dep.name}" 未完成</div>`;
+    }
+  }
+
+  return `<div class="kanban-task-card ${overdue ? 'task-overdue' : ''}"
+       data-task-id="${task.id}"
+       draggable="true"
+       ondragstart="drag(event, '${task.id}')"
+       onclick="openTaskDetail('${task.id}')">
+    ${tagsHtml ? `<div class="kanban-task-tags">${tagsHtml}</div>` : ''}
+    <div class="kanban-task-title">${task.name}</div>
+    <div class="kanban-task-meta">
+      <span style="color:${overdue ? 'var(--danger)' : 'inherit'}">
+        <i class="fas fa-calendar-alt"></i> ${formatDate(task.dueDate)}
+      </span>
+      ${member ? `<div class="kanban-task-assignee" style="background:${member.color}" title="${member.name}">${getInitials(member.name)}</div>` : ''}
+    </div>
+    ${project ? `<div style="margin-top:0.35rem;font-size:0.7rem;color:var(--text-light)"><i class="fas fa-folder"></i> ${project.name}</div>` : ''}
+    ${depWarn}
+  </div>`;
 }
 
 function filterTasks() { renderKanban(); }
 
 function createTask() {
-  const name = document.getElementById('taskName').value.trim();
-  if (!name) { showToast('请输入任务名称', 'error'); return; }
+  clearAllErrors();
+  const nameOk = validateField('taskName', '任务名称');
+  if (!nameOk) return;
 
   const tagsStr = document.getElementById('taskTags').value.trim();
   const task = {
     id: genId('t'),
-    name,
+    name: document.getElementById('taskName').value.trim(),
     description: document.getElementById('taskDesc').value.trim(),
     projectId: document.getElementById('taskProject').value,
     assigneeId: document.getElementById('taskAssignee').value,
@@ -580,14 +804,16 @@ function createTask() {
     estimatedHours: parseInt(document.getElementById('taskHours').value) || 0,
     tags: tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [],
     createdAt: new Date().toISOString().split('T')[0],
+    dependsOn: null,
+    comments: [],
   };
-
   state.tasks.unshift(task);
   addActivity('m1', '创建了任务', task.name);
   saveData();
+  generateNotifications();
   closeModal('createTaskModal');
   clearForm(['taskName', 'taskDesc', 'taskTags', 'taskDue', 'taskHours']);
-  showToast(`任务 "${name}" 创建成功`);
+  showToast(`任务 "${task.name}" 创建成功`);
   if (state.currentSection === 'tasks') renderKanban();
   if (state.currentSection === 'dashboard') renderDashboard();
 }
@@ -614,19 +840,26 @@ function drop(event, newStatus) {
     task.status = newStatus;
     addActivity('m1', '移动了任务至', `${statusLabels[newStatus]} — ${task.name}`);
     saveData();
+    generateNotifications();
     renderKanban();
     showToast('任务状态已更新', 'info');
   }
   draggedTaskId = null;
 }
 
-// ===== 任务详情 =====
+// ===== P1: 任务详情（含评论 + 依赖）=====
 function openTaskDetail(taskId) {
   state.currentTaskId = taskId;
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
 
   document.getElementById('taskDetailTitle').textContent = task.name;
+
+  // 同一项目下的其他任务（依赖选项）
+  const projectTasks = state.tasks.filter(t => t.projectId === task.projectId && t.id !== task.id);
+  const depOptions = `<option value="">无</option>` +
+    projectTasks.map(t => `<option value="${t.id}" ${task.dependsOn === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
+
   document.getElementById('taskDetailBody').innerHTML = `
     <div class="form-group">
       <label>任务名称</label>
@@ -664,12 +897,67 @@ function openTaskDetail(taskId) {
         <input type="number" class="form-input" id="detail-hours" value="${task.estimatedHours || 0}" min="0">
       </div>
     </div>
-    <div class="form-group">
-      <label>标签（逗号分隔）</label>
-      <input type="text" class="form-input" id="detail-tags" value="${(task.tags || []).join(', ')}">
+    <div class="form-row">
+      <div class="form-group">
+        <label>标签（逗号分隔）</label>
+        <input type="text" class="form-input" id="detail-tags" value="${(task.tags || []).join(', ')}">
+      </div>
+      <div class="form-group">
+        <label>前置任务（依赖）</label>
+        <select class="form-input" id="detail-dep">${depOptions}</select>
+      </div>
+    </div>
+    <div class="comments-section">
+      <h4><i class="fas fa-comments" style="margin-right:0.35rem"></i>评论 (${(task.comments || []).length})</h4>
+      <div id="commentsContainer">${renderComments(task)}</div>
+      <div class="comment-input-area">
+        <textarea id="commentInput" placeholder="写下你的评论..." onkeydown="handleCommentKey(event)"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="submitComment()">发送</button>
+      </div>
     </div>`;
 
   openModal('taskDetailModal');
+}
+
+// ===== P1: 评论 =====
+function renderComments(task) {
+  if (!task.comments || !task.comments.length) {
+    return '<div style="padding:0.5rem 0;color:var(--text-light);font-size:0.825rem">暂无评论，来说点什么吧</div>';
+  }
+  return task.comments.map(c => {
+    const m = getMember(c.memberId) || { name: '未知', color: '#94a3b8' };
+    return `<div class="comment-item">
+      <div class="comment-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+      <div class="comment-bubble">
+        <div class="comment-meta">
+          <span class="comment-author">${m.name}</span>
+          <span class="comment-time-text">${c.timestamp}</span>
+        </div>
+        <div class="comment-text">${c.text}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function handleCommentKey(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitComment();
+}
+
+function submitComment() {
+  const input = document.getElementById('commentInput');
+  const text = input ? input.value.trim() : '';
+  if (!text || !state.currentTaskId) return;
+  const task = state.tasks.find(t => t.id === state.currentTaskId);
+  if (!task) return;
+  if (!task.comments) task.comments = [];
+  task.comments.push({
+    id: genId('c'), memberId: 'm1', text,
+    timestamp: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+  });
+  saveData();
+  document.getElementById('commentsContainer').innerHTML = renderComments(task);
+  input.value = '';
+  addActivity('m1', '评论了任务', task.name);
 }
 
 function saveTaskDetail() {
@@ -683,7 +971,9 @@ function saveTaskDetail() {
   task.estimatedHours = parseInt(document.getElementById('detail-hours').value) || 0;
   const tagsStr = document.getElementById('detail-tags').value.trim();
   task.tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+  task.dependsOn = document.getElementById('detail-dep').value || null;
   saveData();
+  generateNotifications();
   closeModal('taskDetailModal');
   showToast('任务已保存');
   if (state.currentSection === 'tasks') renderKanban();
@@ -694,49 +984,45 @@ function deleteCurrentTask() {
   if (!state.currentTaskId) return;
   const task = state.tasks.find(t => t.id === state.currentTaskId);
   state.tasks = state.tasks.filter(t => t.id !== state.currentTaskId);
+  // 清除其他任务对本任务的依赖
+  state.tasks.forEach(t => { if (t.dependsOn === state.currentTaskId) t.dependsOn = null; });
   if (task) addActivity('m1', '删除了任务', task.name);
   saveData();
+  generateNotifications();
   closeModal('taskDetailModal');
   showToast('任务已删除', 'info');
   if (state.currentSection === 'tasks') renderKanban();
   if (state.currentSection === 'dashboard') renderDashboard();
 }
 
-// ===== 团队成员 =====
+// ===== P2: 团队成员（含负载预警）=====
 function renderTeam() {
   document.getElementById('teamGrid').innerHTML = state.members.map(m => {
-    const memberTasks = state.tasks.filter(t => t.assigneeId === m.id);
-    const done = memberTasks.filter(t => t.status === 'done').length;
-    return `
-      <div class="team-card">
-        <div class="team-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
-        <h3>${m.name}</h3>
-        <p class="team-role">${m.role}</p>
-        <p class="team-email">${m.email}</p>
-        <div class="team-stats">
-          <div class="team-stat">
-            <div class="stat-number">${memberTasks.length}</div>
-            <div class="stat-label">总任务</div>
-          </div>
-          <div class="team-stat">
-            <div class="stat-number">${done}</div>
-            <div class="stat-label">已完成</div>
-          </div>
-          <div class="team-stat">
-            <div class="stat-number">${memberTasks.length - done}</div>
-            <div class="stat-label">进行中</div>
-          </div>
-        </div>
-      </div>`;
+    const allTasks = state.tasks.filter(t => t.assigneeId === m.id);
+    const activeTasks = allTasks.filter(t => t.status !== 'done').length;
+    const doneTasks = allTasks.filter(t => t.status === 'done').length;
+    const overloaded = activeTasks >= OVERLOAD_THRESHOLD;
+    return `<div class="team-card ${overloaded ? 'overloaded' : ''}">
+      <div class="team-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+      <h3>${m.name}${overloaded ? '<span class="overload-tag">超载</span>' : ''}</h3>
+      <p class="team-role">${m.role}</p>
+      <p class="team-email">${m.email}</p>
+      ${overloaded ? `<p style="font-size:0.75rem;color:var(--danger);margin-bottom:0.75rem"><i class="fas fa-exclamation-triangle"></i> 活跃任务过多（${activeTasks}个），建议重新分配</p>` : ''}
+      <div class="team-stats">
+        <div class="team-stat"><div class="stat-number">${allTasks.length}</div><div class="stat-label">总任务</div></div>
+        <div class="team-stat"><div class="stat-number">${doneTasks}</div><div class="stat-label">已完成</div></div>
+        <div class="team-stat"><div class="stat-number">${activeTasks}</div><div class="stat-label">进行中</div></div>
+      </div>
+    </div>`;
   }).join('') || '<div style="padding:2rem;text-align:center;color:var(--text-light)">暂无成员</div>';
 }
 
 function addMember() {
-  const name = document.getElementById('memberName').value.trim();
-  if (!name) { showToast('请输入成员姓名', 'error'); return; }
+  clearAllErrors();
+  if (!validateField('memberName', '成员姓名')) return;
   const member = {
     id: genId('m'),
-    name,
+    name: document.getElementById('memberName').value.trim(),
     role: document.getElementById('memberRole').value.trim(),
     email: document.getElementById('memberEmail').value.trim(),
     color: document.getElementById('memberColor').value,
@@ -746,7 +1032,7 @@ function addMember() {
   saveData();
   closeModal('addMemberModal');
   clearForm(['memberName', 'memberRole', 'memberEmail']);
-  showToast(`成员 "${name}" 已添加`);
+  showToast(`成员 "${member.name}" 已添加`);
   if (state.currentSection === 'team') renderTeam();
 }
 
@@ -755,47 +1041,32 @@ function renderCalendar() {
   const year = state.currentDate.getFullYear();
   const month = state.currentDate.getMonth();
   document.getElementById('calendarTitle').textContent = `${year}年 ${month + 1}月`;
-
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrev = new Date(year, month, 0).getDate();
   const today = new Date();
-
   let html = '';
-  for (let i = firstDay - 1; i >= 0; i--) {
-    html += `<div class="calendar-day other-month">${daysInPrev - i}</div>`;
-  }
+  for (let i = firstDay - 1; i >= 0; i--) html += `<div class="calendar-day other-month">${daysInPrev - i}</div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const hasTasks = state.tasks.some(t => t.dueDate === dateStr);
-    html += `
-      <div class="calendar-day ${isToday ? 'today' : ''}">
-        ${d}
-        ${hasTasks ? '<div class="task-dot"></div>' : ''}
-      </div>`;
+    html += `<div class="calendar-day ${isToday ? 'today' : ''}">${d}${hasTasks ? '<div class="task-dot"></div>' : ''}</div>`;
   }
   const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
-  for (let i = 1; i <= totalCells - firstDay - daysInMonth; i++) {
-    html += `<div class="calendar-day other-month">${i}</div>`;
-  }
+  for (let i = 1; i <= totalCells - firstDay - daysInMonth; i++) html += `<div class="calendar-day other-month">${i}</div>`;
   document.getElementById('calendarDays').innerHTML = html;
 
   const statusLabels = { todo: '待办', inprogress: '进行中', done: '已完成' };
   const monthlyTasks = state.tasks
     .filter(t => { if (!t.dueDate) return false; const d = new Date(t.dueDate); return d.getFullYear() === year && d.getMonth() === month; })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
   document.getElementById('monthlyTasks').innerHTML = monthlyTasks.length
-    ? monthlyTasks.map(t => `
-        <div class="recent-task-item" onclick="openTaskDetail('${t.id}')">
-          <div class="task-priority-dot priority-${t.priority}"></div>
-          <div class="recent-task-info">
-            <h4>${t.name}</h4>
-            <span>${formatDate(t.dueDate)}</span>
-          </div>
-          <span class="task-status-badge status-${t.status}">${statusLabels[t.status]}</span>
-        </div>`).join('')
+    ? monthlyTasks.map(t => `<div class="recent-task-item" onclick="openTaskDetail('${t.id}')">
+        <div class="task-priority-dot priority-${t.priority}"></div>
+        <div class="recent-task-info"><h4>${t.name}</h4><span>${formatDate(t.dueDate)}</span></div>
+        <span class="task-status-badge status-${t.status}">${statusLabels[t.status]}</span>
+      </div>`).join('')
     : '<div style="padding:1rem;text-align:center;color:var(--text-light)">本月暂无截止任务</div>';
 }
 
@@ -804,15 +1075,14 @@ function changeMonth(delta) {
   renderCalendar();
 }
 
-// ===== 报表分析 =====
-let completionChartInst = null;
-let workloadChartInst = null;
-let trendChartInst = null;
+// ===== P2: 报表分析（含燃尽图）=====
+let completionChartInst = null, workloadChartInst = null, trendChartInst = null, burndownChartInst = null;
 
 function renderReports() {
   renderCompletionChart();
   renderWorkloadChart();
   renderTrendChart();
+  renderBurndownChart();
 }
 
 function renderCompletionChart() {
@@ -822,14 +1092,7 @@ function renderCompletionChart() {
     type: 'bar',
     data: {
       labels: state.projects.map(p => p.name.length > 8 ? p.name.slice(0, 8) + '…' : p.name),
-      datasets: [{
-        label: '完成率(%)',
-        data: state.projects.map(p => calcProjectProgress(p.id)),
-        backgroundColor: state.projects.map(p => p.color + 'cc'),
-        borderColor: state.projects.map(p => p.color),
-        borderWidth: 1,
-        borderRadius: 6,
-      }],
+      datasets: [{ label: '完成率(%)', data: state.projects.map(p => calcProjectProgress(p.id)), backgroundColor: state.projects.map(p => p.color + 'cc'), borderColor: state.projects.map(p => p.color), borderWidth: 1, borderRadius: 6 }],
     },
     options: { responsive: true, scales: { y: { min: 0, max: 100 } }, plugins: { legend: { display: false } } },
   });
@@ -842,14 +1105,7 @@ function renderWorkloadChart() {
     type: 'bar',
     data: {
       labels: state.members.map(m => m.name),
-      datasets: [{
-        label: '任务数量',
-        data: state.members.map(m => state.tasks.filter(t => t.assigneeId === m.id).length),
-        backgroundColor: state.members.map(m => m.color + 'cc'),
-        borderColor: state.members.map(m => m.color),
-        borderWidth: 1,
-        borderRadius: 6,
-      }],
+      datasets: [{ label: '任务数量', data: state.members.map(m => state.tasks.filter(t => t.assigneeId === m.id).length), backgroundColor: state.members.map(m => m.color + 'cc'), borderColor: state.members.map(m => m.color), borderWidth: 1, borderRadius: 6 }],
     },
     options: { responsive: true, plugins: { legend: { display: false } } },
   });
@@ -858,7 +1114,6 @@ function renderWorkloadChart() {
 function renderTrendChart() {
   const ctx = document.getElementById('trendChart').getContext('2d');
   if (trendChartInst) trendChartInst.destroy();
-
   const now = new Date();
   const months = [], created = [], completed = [];
   for (let i = 5; i >= 0; i--) {
@@ -868,17 +1123,45 @@ function renderTrendChart() {
     created.push(state.tasks.filter(t => { if (!t.createdAt) return false; const cd = new Date(t.createdAt); return cd.getFullYear() === y && cd.getMonth() === m; }).length);
     completed.push(state.tasks.filter(t => { if (!t.dueDate || t.status !== 'done') return false; const dd = new Date(t.dueDate); return dd.getFullYear() === y && dd.getMonth() === m; }).length);
   }
-
   trendChartInst = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: months,
-      datasets: [
-        { label: '新建任务', data: created, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,0.1)', tension: 0.4, fill: true },
-        { label: '完成任务', data: completed, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', tension: 0.4, fill: true },
-      ],
-    },
+    data: { labels: months, datasets: [
+      { label: '新建任务', data: created, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,0.1)', tension: 0.4, fill: true },
+      { label: '完成任务', data: completed, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)', tension: 0.4, fill: true },
+    ]},
     options: { responsive: true, plugins: { legend: { display: true, position: 'top' } }, scales: { y: { min: 0 } } },
+  });
+}
+
+function renderBurndownChart() {
+  const ctx = document.getElementById('burndownChart').getContext('2d');
+  if (burndownChartInst) burndownChartInst.destroy();
+  const DAYS = 14;
+  const labels = [], remaining = [], ideal = [];
+  const totalTasks = state.tasks.length;
+
+  for (let i = DAYS; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dStr = d.toISOString().split('T')[0];
+    labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
+    const createdUpTo = state.tasks.filter(t => t.createdAt && t.createdAt <= dStr).length;
+    const doneUpTo = state.tasks.filter(t => t.status === 'done' && t.dueDate && t.dueDate <= dStr).length;
+    remaining.push(Math.max(0, createdUpTo - doneUpTo));
+    ideal.push(Math.round(totalTasks * (i / DAYS)));
+  }
+
+  burndownChartInst = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label: '剩余任务', data: remaining, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,0.1)', tension: 0.3, fill: true, pointRadius: 3 },
+      { label: '理想燃尽线', data: ideal, borderColor: '#94a3b8', borderDash: [6, 3], borderWidth: 2, pointRadius: 0, fill: false },
+    ]},
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, position: 'top' } },
+      scales: { y: { min: 0, title: { display: true, text: '剩余任务数' } } },
+    },
   });
 }
 
@@ -895,17 +1178,11 @@ function handleSearch(query) {
     const filtered = state.projects.filter(p => p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
     document.getElementById('projectsContainer').innerHTML = filtered.map(p => {
       const progress = calcProjectProgress(p.id);
-      return `
-        <div class="project-card" style="border-left-color:${p.color}">
-          <div class="project-card-header">
-            <h3>${p.name}</h3>
-            <span class="project-status status-${p.status}">${statusLabels[p.status]}</span>
-          </div>
-          <div class="project-card-body"><p>${p.description}</p></div>
-          <div class="project-card-footer">
-            <span style="font-size:0.75rem;color:var(--text-secondary)">${progress}%</span>
-          </div>
-        </div>`;
+      return `<div class="project-card" style="border-left-color:${p.color}">
+        <div class="project-card-header"><h3>${p.name}</h3><span class="project-status status-${p.status}">${statusLabels[p.status]}</span></div>
+        <div class="project-card-body"><p>${p.description}</p></div>
+        <div class="project-card-footer"><span style="font-size:0.75rem;color:var(--text-secondary)">${progress}%</span></div>
+      </div>`;
     }).join('') || '<div style="padding:2rem;text-align:center;color:var(--text-light)">未找到相关项目</div>';
   }
   if (state.currentSection === 'tasks') {
@@ -923,6 +1200,14 @@ function handleSearch(query) {
 function init() {
   loadData();
   renderDashboard();
+  generateNotifications();
+  setupTouchDrag();
+
+  // 点击外部关闭通知下拉
+  document.addEventListener('click', (e) => {
+    const bell = e.target.closest('.notification-bell');
+    if (!bell) document.getElementById('notificationDropdown').classList.remove('open');
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
