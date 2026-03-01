@@ -1404,3 +1404,47 @@ body {
     gap: 0.5rem; margin-bottom: 1rem;
 }
 #burndownChart { max-width: 100% !important; max-height: 250px !important; }
+
+/* ===== 优化补丁 ===== */
+
+/* 确认对话框 */
+.modal-sm { max-width: 400px !important; }
+.confirm-icon { text-align: center; font-size: 2rem; margin-bottom: 0.75rem; }
+.confirm-message { text-align: center; color: var(--text-secondary); line-height: 1.6; }
+
+/* 项目成员管理 */
+.member-toggle-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.member-toggle-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.625rem 0.875rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+.member-toggle-info { display: flex; align-items: center; gap: 0.75rem; }
+.member-toggle-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; color: white; flex-shrink: 0;
+}
+.member-in-project { border-left: 3px solid var(--success); }
+
+/* 日历选中日 */
+.calendar-day { cursor: pointer; }
+.calendar-day.selected {
+    background: var(--primary) !important;
+    color: white !important;
+    border-radius: 4px;
+    font-weight: 700;
+}
+.calendar-day.selected .task-dot { background: white; }
+.calendar-day:hover:not(.other-month) { background: rgba(79,70,229,0.1); border-radius: 4px; }
+
+/* 数据导入/恢复按钮 */
+.reports-toolbar .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+
+/* 看板排序下拉 */
+#kanbanSortBy { font-size: 0.8rem; }
+
+/* 当前用户 select 样式 */
+#currentUserSelect option { color: #333; background: white; }

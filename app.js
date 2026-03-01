@@ -8,6 +8,9 @@ const state = {
   currentSection: 'dashboard',
   currentDate: new Date(),
   currentTaskId: null,
+  currentProjectId: null,
+  selectedDate: null,
+  currentUserId: 'm1',
   projectFilter: 'all',
   projectSort: 'date',
   projectView: 'grid',
@@ -151,36 +154,226 @@ const sampleData = {
 
 // ===== LocalStorage =====
 function saveData() {
-  localStorage.setItem('pm_projects', JSON.stringify(state.projects));
-  localStorage.setItem('pm_tasks', JSON.stringify(state.tasks));
-  localStorage.setItem('pm_members', JSON.stringify(state.members));
-  localStorage.setItem('pm_activities', JSON.stringify(state.activities));
+  try {
+    localStorage.setItem('pm_projects', JSON.stringify(state.projects));
+    localStorage.setItem('pm_tasks', JSON.stringify(state.tasks));
+    localStorage.setItem('pm_members', JSON.stringify(state.members));
+    localStorage.setItem('pm_activities', JSON.stringify(state.activities));
+  } catch (e) {
+    console.error('saveData error:', e);
+    showToast('数据保存失败：存储空间不足，请清理浏览器缓存', 'error');
+  }
 }
 
 function loadData() {
-  const raw = localStorage.getItem('pm_projects');
-  if (raw) {
-    state.projects = JSON.parse(raw);
-    state.tasks = JSON.parse(localStorage.getItem('pm_tasks') || '[]');
-    state.members = JSON.parse(localStorage.getItem('pm_members') || '[]');
-    state.activities = JSON.parse(localStorage.getItem('pm_activities') || '[]');
-    // 向前兼容：补齐缺失字段
-    state.projects.forEach(p => { if (!p.milestones) p.milestones = []; });
-    state.tasks.forEach(t => {
-      if (!t.comments) t.comments = [];
-      if (t.dependsOn === undefined) t.dependsOn = null;
-    });
-  } else {
+  try {
+    const raw = localStorage.getItem('pm_projects');
+    if (raw) {
+      state.projects = JSON.parse(raw);
+      state.tasks = JSON.parse(localStorage.getItem('pm_tasks') || '[]');
+      state.members = JSON.parse(localStorage.getItem('pm_members') || '[]');
+      state.activities = JSON.parse(localStorage.getItem('pm_activities') || '[]');
+      // 向前兼容：补齐缺失字段
+      state.projects.forEach(p => { if (!p.milestones) p.milestones = []; });
+      state.tasks.forEach(t => {
+        if (!t.comments) t.comments = [];
+        if (t.dependsOn === undefined) t.dependsOn = null;
+      });
+    } else {
+      state.projects = sampleData.projects;
+      state.tasks = sampleData.tasks;
+      state.members = sampleData.members;
+      state.activities = sampleData.activities;
+      saveData();
+    }
+  } catch (e) {
+    console.error('loadData error:', e);
+    showToast('数据读取异常，已重置为示例数据', 'error');
     state.projects = sampleData.projects;
     state.tasks = sampleData.tasks;
     state.members = sampleData.members;
     state.activities = sampleData.activities;
-    saveData();
   }
+  // 恢复当前用户
+  const savedUser = localStorage.getItem('pm_currentUser');
+  if (savedUser) state.currentUserId = savedUser;
 }
 
 function genId(prefix) {
   return prefix + Date.now() + Math.random().toString(36).slice(2, 6);
+}
+
+// ===== 防抖 =====
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
+const debouncedSearch = debounce(handleSearch, 300);
+
+// ===== 确认对话框 =====
+let _confirmCallback = null;
+
+function confirmAction(title, message, onConfirm, okLabel = '确认', danger = true) {
+  _confirmCallback = onConfirm;
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMessage').textContent = message;
+  const okBtn = document.getElementById('confirmOkBtn');
+  okBtn.textContent = okLabel;
+  okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+  openModal('confirmModal');
+}
+
+function executeConfirm() {
+  closeModal('confirmModal');
+  if (typeof _confirmCallback === 'function') {
+    _confirmCallback();
+    _confirmCallback = null;
+  }
+}
+
+// ===== 当前用户管理 =====
+function initCurrentUser() {
+  const select = document.getElementById('currentUserSelect');
+  if (!select) return;
+  select.innerHTML = state.members.map(m =>
+    `<option value="${m.id}" ${m.id === state.currentUserId ? 'selected' : ''}>${m.name}</option>`
+  ).join('');
+  updateCurrentUserUI();
+}
+
+function changeCurrentUser(userId) {
+  state.currentUserId = userId;
+  try { localStorage.setItem('pm_currentUser', userId); } catch (e) {}
+  updateCurrentUserUI();
+}
+
+function updateCurrentUserUI() {
+  const m = getMember(state.currentUserId);
+  if (!m) return;
+  const avatar = document.getElementById('currentUserAvatar');
+  const roleEl = document.getElementById('currentUserRole');
+  if (avatar) { avatar.textContent = getInitials(m.name); avatar.style.background = m.color; }
+  if (roleEl) roleEl.textContent = m.role;
+}
+
+// ===== 数据备份与恢复 =====
+function exportAllData() {
+  const payload = {
+    version: 1,
+    exportDate: new Date().toISOString(),
+    projects: state.projects,
+    tasks: state.tasks,
+    members: state.members,
+    activities: state.activities,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据备份已下载');
+}
+
+function importData(fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.projects) || !Array.isArray(data.tasks) || !Array.isArray(data.members)) {
+        throw new Error('格式无效');
+      }
+      confirmAction(
+        '确认恢复数据',
+        `将导入 ${data.projects.length} 个项目、${data.tasks.length} 个任务，当前所有数据将被覆盖，此操作不可撤销。是否继续？`,
+        () => {
+          state.projects = data.projects;
+          state.tasks = data.tasks;
+          state.members = data.members;
+          state.activities = data.activities || [];
+          state.projects.forEach(p => { if (!p.milestones) p.milestones = []; });
+          state.tasks.forEach(t => { if (!t.comments) t.comments = []; if (t.dependsOn === undefined) t.dependsOn = null; });
+          saveData();
+          generateNotifications();
+          initCurrentUser();
+          showSection(state.currentSection);
+          showToast(`数据恢复成功：${data.projects.length} 个项目，${data.tasks.length} 个任务`);
+        },
+        '确认覆盖', true
+      );
+    } catch (err) {
+      showToast('数据导入失败：文件格式无效', 'error');
+    }
+    fileInput.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ===== 项目成员管理 =====
+function openProjectMembers(projectId) {
+  state.currentProjectId = projectId;
+  const project = getProject(projectId);
+  if (!project) return;
+  renderProjectMembersModal(project);
+  openModal('projectMembersModal');
+}
+
+function renderProjectMembersModal(project) {
+  document.getElementById('projectMembersBody').innerHTML = `
+    <p style="margin-bottom:1rem;color:var(--text-secondary)">项目：<strong>${project.name}</strong></p>
+    <div class="member-toggle-list">
+      ${state.members.length === 0 ? '<div style="padding:1rem;text-align:center;color:var(--text-light)">暂无成员，请先添加团队成员</div>' :
+        state.members.map(m => {
+          const isMember = (project.members || []).includes(m.id);
+          return `<div class="member-toggle-item ${isMember ? 'member-in-project' : ''}">
+            <div class="member-toggle-info">
+              <div class="member-toggle-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+              <div>
+                <div style="font-weight:600;font-size:0.875rem">${m.name}</div>
+                <div style="font-size:0.75rem;color:var(--text-secondary)">${m.role}</div>
+              </div>
+            </div>
+            <button class="btn btn-sm ${isMember ? 'btn-danger' : 'btn-primary'}"
+                    onclick="toggleProjectMember('${project.id}','${m.id}')">
+              <i class="fas fa-${isMember ? 'times' : 'plus'}"></i> ${isMember ? '移除' : '加入'}
+            </button>
+          </div>`;
+        }).join('')
+      }
+    </div>`;
+}
+
+function toggleProjectMember(projectId, memberId) {
+  const project = getProject(projectId);
+  if (!project) return;
+  if (!project.members) project.members = [];
+  const idx = project.members.indexOf(memberId);
+  const member = getMember(memberId);
+  if (idx === -1) {
+    project.members.push(memberId);
+    addActivity(state.currentUserId, '加入了项目', project.name);
+    showToast(`${member?.name || '成员'} 已加入项目`);
+  } else {
+    project.members.splice(idx, 1);
+    showToast(`${member?.name || '成员'} 已从项目移除`, 'info');
+  }
+  saveData();
+  renderProjectMembersModal(project);
+  if (state.currentSection === 'projects') renderProjects();
+}
+
+// ===== 依赖校验 =====
+function checkDependencies(task) {
+  if (!task.dependsOn) return true;
+  const dep = state.tasks.find(t => t.id === task.dependsOn);
+  if (dep && dep.status !== 'done') {
+    showToast(`无法完成：前置任务 "${dep.name}" 尚未完成`, 'error');
+    return false;
+  }
+  return true;
 }
 
 // ===== P0: 表单内联校验 =====
@@ -248,8 +441,11 @@ function setupTouchDrag() {
       const newStatus = col.id.replace('tasks-', '');
       const task = state.tasks.find(t => t.id === touchTaskId);
       if (task && task.status !== newStatus) {
+        if (newStatus === 'done' && !checkDependencies(task)) {
+          touchGhost.remove(); touchGhost = null; touchTaskId = null; return;
+        }
         task.status = newStatus;
-        addActivity('m1', '移动了任务', task.name);
+        addActivity(state.currentUserId, '移动了任务', task.name);
         saveData();
         renderKanban();
         showToast('任务状态已更新', 'info');
@@ -492,10 +688,31 @@ function toggleSidebar() {
 // ===== 模态框 =====
 function openModal(id) {
   clearAllErrors();
+  if (id === 'createProjectModal') {
+    milestoneInputCount = 0;
+    document.getElementById('milestoneInputs').innerHTML = '';
+    document.getElementById('projectName').value = '';
+    document.getElementById('projectDesc').value = '';
+    document.getElementById('projectStart').value = '';
+    document.getElementById('projectEnd').value = '';
+    document.getElementById('projectPriority').value = 'medium';
+    document.getElementById('projectColor').value = '#4f46e5';
+  }
+  if (id === 'createTaskModal') {
+    ['taskName', 'taskDesc', 'taskDue', 'taskHours', 'taskTags'].forEach(fid => {
+      const el = document.getElementById(fid); if (el) el.value = '';
+    });
+    const pri = document.getElementById('taskPriority'); if (pri) pri.value = 'medium';
+    populateTaskForm();
+  }
+  if (id === 'addMemberModal') {
+    ['memberName', 'memberRole', 'memberEmail'].forEach(fid => {
+      const el = document.getElementById(fid); if (el) el.value = '';
+    });
+    const col = document.getElementById('memberColor'); if (col) col.value = '#4f46e5';
+  }
   document.getElementById(id).classList.add('active');
   document.getElementById('overlay').classList.add('active');
-  if (id === 'createTaskModal') populateTaskForm();
-  if (id === 'createProjectModal') { milestoneInputCount = 0; document.getElementById('milestoneInputs').innerHTML = ''; }
 }
 
 function closeModal(id) {
@@ -603,16 +820,24 @@ function renderActivityList() {
   }).join('');
 }
 
-let taskStatusChartInst = null;
+// ===== 图表实例管理 =====
+const chartInstances = {};
+function safeDestroyChart(key) {
+  if (chartInstances[key]) {
+    try { chartInstances[key].destroy(); } catch (e) {}
+    chartInstances[key] = null;
+  }
+}
+
 function renderTaskStatusChart() {
+  safeDestroyChart('taskStatus');
   const ctx = document.getElementById('taskStatusChart').getContext('2d');
   const counts = {
     todo: state.tasks.filter(t => t.status === 'todo').length,
     inprogress: state.tasks.filter(t => t.status === 'inprogress').length,
     done: state.tasks.filter(t => t.status === 'done').length,
   };
-  if (taskStatusChartInst) taskStatusChartInst.destroy();
-  taskStatusChartInst = new Chart(ctx, {
+  chartInstances['taskStatus'] = new Chart(ctx, {
     type: 'doughnut',
     data: { labels: ['待办', '进行中', '已完成'], datasets: [{ data: [counts.todo, counts.inprogress, counts.done], backgroundColor: ['#f59e0b', '#4f46e5', '#22c55e'], borderWidth: 0 }] },
     options: { responsive: true, plugins: { legend: { display: false } }, cutout: '70%' },
@@ -649,7 +874,14 @@ function renderProjects() {
       <div class="project-card" style="border-left-color:${p.color}" onclick="showSection('tasks')">
         <div class="project-card-header">
           <h3>${p.name}</h3>
-          <span class="project-status status-${p.status}">${statusLabels[p.status]}</span>
+          <div style="display:flex;align-items:center;gap:0.5rem">
+            <span class="project-status status-${p.status}">${statusLabels[p.status]}</span>
+            <button class="btn btn-sm btn-icon" title="管理成员"
+              onclick="event.stopPropagation();openProjectMembers('${p.id}')"
+              style="padding:0.2rem 0.4rem;font-size:0.75rem">
+              <i class="fas fa-users-cog"></i>
+            </button>
+          </div>
         </div>
         <div class="project-card-body">
           <p>${p.description}</p>
@@ -661,7 +893,12 @@ function renderProjects() {
           </div>
         </div>
         <div class="project-card-footer">
-          <div class="project-members">${membersHtml}</div>
+          <div class="project-members" style="cursor:pointer" title="点击管理成员"
+            onclick="event.stopPropagation();openProjectMembers('${p.id}')">${membersHtml}
+            <div class="project-member-avatar" style="background:#e2e8f0;color:#64748b;font-size:0.65rem" title="管理成员">
+              <i class="fas fa-plus"></i>
+            </div>
+          </div>
           <div style="text-align:right">
             <div class="progress-bar" style="width:80px">
               <div class="progress-fill" style="width:${progress}%;background:${p.color}"></div>
@@ -700,11 +937,10 @@ function createProject() {
     milestones: collectMilestones(),
   };
   state.projects.unshift(project);
-  addActivity('m1', '创建了项目', project.name);
+  addActivity(state.currentUserId, '创建了项目', project.name);
   saveData();
   generateNotifications();
   closeModal('createProjectModal');
-  clearForm(['projectName', 'projectDesc', 'projectStart', 'projectEnd']);
   showToast(`项目 "${project.name}" 创建成功`);
   if (state.currentSection === 'projects') renderProjects();
   if (state.currentSection === 'dashboard') renderDashboard();
@@ -739,10 +975,21 @@ function renderKanban() {
   const projFilter = document.getElementById('taskProjectFilter').value;
   const statusFilter = document.getElementById('taskStatusFilter').value;
   const priorityFilter = document.getElementById('taskPriorityFilter').value;
+  const sortBy = document.getElementById('kanbanSortBy')?.value || 'default';
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
   let tasks = [...state.tasks];
   if (projFilter !== 'all') tasks = tasks.filter(t => t.projectId === projFilter);
   if (statusFilter !== 'all') tasks = tasks.filter(t => t.status === statusFilter);
   if (priorityFilter !== 'all') tasks = tasks.filter(t => t.priority === priorityFilter);
+  if (sortBy === 'priority') {
+    tasks.sort((a, b) => (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1));
+  } else if (sortBy === 'due') {
+    tasks.sort((a, b) => {
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    });
+  }
   const columns = { todo: [], inprogress: [], done: [] };
   tasks.forEach(t => { if (columns[t.status]) columns[t.status].push(t); });
   Object.keys(columns).forEach(status => {
@@ -808,11 +1055,10 @@ function createTask() {
     comments: [],
   };
   state.tasks.unshift(task);
-  addActivity('m1', '创建了任务', task.name);
+  addActivity(state.currentUserId, '创建了任务', task.name);
   saveData();
   generateNotifications();
   closeModal('createTaskModal');
-  clearForm(['taskName', 'taskDesc', 'taskTags', 'taskDue', 'taskHours']);
   showToast(`任务 "${task.name}" 创建成功`);
   if (state.currentSection === 'tasks') renderKanban();
   if (state.currentSection === 'dashboard') renderDashboard();
@@ -836,9 +1082,13 @@ function drop(event, newStatus) {
   if (!draggedTaskId) return;
   const task = state.tasks.find(t => t.id === draggedTaskId);
   if (task && task.status !== newStatus) {
+    if (newStatus === 'done' && !checkDependencies(task)) {
+      draggedTaskId = null;
+      return;
+    }
     const statusLabels = { todo: '待办', inprogress: '进行中', done: '已完成' };
     task.status = newStatus;
-    addActivity('m1', '移动了任务至', `${statusLabels[newStatus]} — ${task.name}`);
+    addActivity(state.currentUserId, '移动了任务至', `${statusLabels[newStatus]} — ${task.name}`);
     saveData();
     generateNotifications();
     renderKanban();
@@ -951,27 +1201,33 @@ function submitComment() {
   if (!task) return;
   if (!task.comments) task.comments = [];
   task.comments.push({
-    id: genId('c'), memberId: 'm1', text,
+    id: genId('c'), memberId: state.currentUserId, text,
     timestamp: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
   });
   saveData();
   document.getElementById('commentsContainer').innerHTML = renderComments(task);
   input.value = '';
-  addActivity('m1', '评论了任务', task.name);
+  addActivity(state.currentUserId, '评论了任务', task.name);
 }
 
 function saveTaskDetail() {
   const task = state.tasks.find(t => t.id === state.currentTaskId);
   if (!task) return;
+  const newStatus = document.getElementById('detail-status').value;
+  if (newStatus === 'done' && task.status !== 'done') {
+    const depId = document.getElementById('detail-dep').value || task.dependsOn;
+    if (!checkDependencies({ dependsOn: depId || null })) return;
+  }
   task.name = document.getElementById('detail-name').value.trim();
   task.description = document.getElementById('detail-desc').value.trim();
-  task.status = document.getElementById('detail-status').value;
+  task.status = newStatus;
   task.priority = document.getElementById('detail-priority').value;
   task.dueDate = document.getElementById('detail-due').value;
   task.estimatedHours = parseInt(document.getElementById('detail-hours').value) || 0;
   const tagsStr = document.getElementById('detail-tags').value.trim();
   task.tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
   task.dependsOn = document.getElementById('detail-dep').value || null;
+  addActivity(state.currentUserId, '更新了任务', task.name);
   saveData();
   generateNotifications();
   closeModal('taskDetailModal');
@@ -983,16 +1239,22 @@ function saveTaskDetail() {
 function deleteCurrentTask() {
   if (!state.currentTaskId) return;
   const task = state.tasks.find(t => t.id === state.currentTaskId);
-  state.tasks = state.tasks.filter(t => t.id !== state.currentTaskId);
-  // 清除其他任务对本任务的依赖
-  state.tasks.forEach(t => { if (t.dependsOn === state.currentTaskId) t.dependsOn = null; });
-  if (task) addActivity('m1', '删除了任务', task.name);
-  saveData();
-  generateNotifications();
-  closeModal('taskDetailModal');
-  showToast('任务已删除', 'info');
-  if (state.currentSection === 'tasks') renderKanban();
-  if (state.currentSection === 'dashboard') renderDashboard();
+  confirmAction(
+    '删除任务',
+    `确定要删除任务 "${task?.name || ''}" 吗？其他任务对它的依赖也将被清除，此操作不可撤销。`,
+    () => {
+      const taskId = state.currentTaskId;
+      state.tasks = state.tasks.filter(t => t.id !== taskId);
+      state.tasks.forEach(t => { if (t.dependsOn === taskId) t.dependsOn = null; });
+      if (task) addActivity(state.currentUserId, '删除了任务', task.name);
+      saveData();
+      generateNotifications();
+      closeModal('taskDetailModal');
+      showToast('任务已删除', 'info');
+      if (state.currentSection === 'tasks') renderKanban();
+      if (state.currentSection === 'dashboard') renderDashboard();
+    }
+  );
 }
 
 // ===== P2: 团队成员（含负载预警）=====
@@ -1028,10 +1290,10 @@ function addMember() {
     color: document.getElementById('memberColor').value,
   };
   state.members.push(member);
-  addActivity('m1', '添加了成员', member.name);
+  addActivity(state.currentUserId, '添加了成员', member.name);
   saveData();
   closeModal('addMemberModal');
-  clearForm(['memberName', 'memberRole', 'memberEmail']);
+  initCurrentUser();
   showToast(`成员 "${member.name}" 已添加`);
   if (state.currentSection === 'team') renderTeam();
 }
@@ -1051,13 +1313,38 @@ function renderCalendar() {
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const hasTasks = state.tasks.some(t => t.dueDate === dateStr);
-    html += `<div class="calendar-day ${isToday ? 'today' : ''}">${d}${hasTasks ? '<div class="task-dot"></div>' : ''}</div>`;
+    const isSelected = state.selectedDate === dateStr;
+    html += `<div class="calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}"
+      onclick="selectCalendarDay('${dateStr}')"
+      >${d}${hasTasks ? '<div class="task-dot"></div>' : ''}</div>`;
   }
   const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
   for (let i = 1; i <= totalCells - firstDay - daysInMonth; i++) html += `<div class="calendar-day other-month">${i}</div>`;
   document.getElementById('calendarDays').innerHTML = html;
 
+  // 当天任务面板
+  const dayPanel = document.getElementById('dayTasksPanel');
+  const dayList = document.getElementById('dayTasksList');
+  const dayTitle = document.getElementById('dayTasksTitle');
+  const dayBtn = document.getElementById('dayTasksCreateBtn');
   const statusLabels = { todo: '待办', inprogress: '进行中', done: '已完成' };
+  if (state.selectedDate) {
+    const dayTasks = state.tasks.filter(t => t.dueDate === state.selectedDate);
+    dayTitle.textContent = `${state.selectedDate} 的任务（${dayTasks.length}）`;
+    dayBtn.setAttribute('onclick', `createTaskForDate('${state.selectedDate}')`);
+    dayList.innerHTML = dayTasks.length
+      ? dayTasks.map(t => `<div class="recent-task-item" onclick="openTaskDetail('${t.id}')">
+          <div class="task-priority-dot priority-${t.priority}"></div>
+          <div class="recent-task-info"><h4>${t.name}</h4>
+            <span>${getProject(t.projectId)?.name || '-'}</span></div>
+          <span class="task-status-badge status-${t.status}">${statusLabels[t.status]}</span>
+        </div>`).join('')
+      : '<div style="padding:1rem;text-align:center;color:var(--text-light)">当天无截止任务，点击右上角按钮创建</div>';
+    dayPanel.style.display = '';
+  } else {
+    dayPanel.style.display = 'none';
+  }
+
   const monthlyTasks = state.tasks
     .filter(t => { if (!t.dueDate) return false; const d = new Date(t.dueDate); return d.getFullYear() === year && d.getMonth() === month; })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
@@ -1070,14 +1357,26 @@ function renderCalendar() {
     : '<div style="padding:1rem;text-align:center;color:var(--text-light)">本月暂无截止任务</div>';
 }
 
+function selectCalendarDay(dateStr) {
+  state.selectedDate = state.selectedDate === dateStr ? null : dateStr;
+  renderCalendar();
+}
+
+function createTaskForDate(dateStr) {
+  openModal('createTaskModal');
+  setTimeout(() => {
+    const el = document.getElementById('taskDue');
+    if (el) el.value = dateStr;
+  }, 50);
+}
+
 function changeMonth(delta) {
+  state.selectedDate = null;
   state.currentDate = new Date(state.currentDate.getFullYear(), state.currentDate.getMonth() + delta, 1);
   renderCalendar();
 }
 
 // ===== P2: 报表分析（含燃尽图）=====
-let completionChartInst = null, workloadChartInst = null, trendChartInst = null, burndownChartInst = null;
-
 function renderReports() {
   renderCompletionChart();
   renderWorkloadChart();
@@ -1086,9 +1385,9 @@ function renderReports() {
 }
 
 function renderCompletionChart() {
+  safeDestroyChart('completion');
   const ctx = document.getElementById('completionChart').getContext('2d');
-  if (completionChartInst) completionChartInst.destroy();
-  completionChartInst = new Chart(ctx, {
+  chartInstances['completion'] = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: state.projects.map(p => p.name.length > 8 ? p.name.slice(0, 8) + '…' : p.name),
@@ -1099,9 +1398,9 @@ function renderCompletionChart() {
 }
 
 function renderWorkloadChart() {
+  safeDestroyChart('workload');
   const ctx = document.getElementById('workloadChart').getContext('2d');
-  if (workloadChartInst) workloadChartInst.destroy();
-  workloadChartInst = new Chart(ctx, {
+  chartInstances['workload'] = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: state.members.map(m => m.name),
@@ -1112,8 +1411,8 @@ function renderWorkloadChart() {
 }
 
 function renderTrendChart() {
+  safeDestroyChart('trend');
   const ctx = document.getElementById('trendChart').getContext('2d');
-  if (trendChartInst) trendChartInst.destroy();
   const now = new Date();
   const months = [], created = [], completed = [];
   for (let i = 5; i >= 0; i--) {
@@ -1123,7 +1422,7 @@ function renderTrendChart() {
     created.push(state.tasks.filter(t => { if (!t.createdAt) return false; const cd = new Date(t.createdAt); return cd.getFullYear() === y && cd.getMonth() === m; }).length);
     completed.push(state.tasks.filter(t => { if (!t.dueDate || t.status !== 'done') return false; const dd = new Date(t.dueDate); return dd.getFullYear() === y && dd.getMonth() === m; }).length);
   }
-  trendChartInst = new Chart(ctx, {
+  chartInstances['trend'] = new Chart(ctx, {
     type: 'line',
     data: { labels: months, datasets: [
       { label: '新建任务', data: created, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,0.1)', tension: 0.4, fill: true },
@@ -1134,12 +1433,11 @@ function renderTrendChart() {
 }
 
 function renderBurndownChart() {
+  safeDestroyChart('burndown');
   const ctx = document.getElementById('burndownChart').getContext('2d');
-  if (burndownChartInst) burndownChartInst.destroy();
   const DAYS = 14;
   const labels = [], remaining = [], ideal = [];
   const totalTasks = state.tasks.length;
-
   for (let i = DAYS; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -1150,8 +1448,7 @@ function renderBurndownChart() {
     remaining.push(Math.max(0, createdUpTo - doneUpTo));
     ideal.push(Math.round(totalTasks * (i / DAYS)));
   }
-
-  burndownChartInst = new Chart(ctx, {
+  chartInstances['burndown'] = new Chart(ctx, {
     type: 'line',
     data: { labels, datasets: [
       { label: '剩余任务', data: remaining, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,0.1)', tension: 0.3, fill: true, pointRadius: 3 },
@@ -1199,6 +1496,7 @@ function handleSearch(query) {
 // ===== 初始化 =====
 function init() {
   loadData();
+  initCurrentUser();
   renderDashboard();
   generateNotifications();
   setupTouchDrag();
@@ -1207,6 +1505,28 @@ function init() {
   document.addEventListener('click', (e) => {
     const bell = e.target.closest('.notification-bell');
     if (!bell) document.getElementById('notificationDropdown').classList.remove('open');
+  });
+
+  // 多标签页数据同步
+  window.addEventListener('storage', (e) => {
+    if (!e.key || !e.key.startsWith('pm_')) return;
+    try {
+      state.projects = JSON.parse(localStorage.getItem('pm_projects') || '[]');
+      state.tasks = JSON.parse(localStorage.getItem('pm_tasks') || '[]');
+      state.members = JSON.parse(localStorage.getItem('pm_members') || '[]');
+      state.activities = JSON.parse(localStorage.getItem('pm_activities') || '[]');
+      state.projects.forEach(p => { if (!p.milestones) p.milestones = []; });
+      state.tasks.forEach(t => { if (!t.comments) t.comments = []; if (t.dependsOn === undefined) t.dependsOn = null; });
+    } catch (err) { return; }
+    generateNotifications();
+    initCurrentUser();
+    if (state.currentSection === 'dashboard') renderDashboard();
+    else if (state.currentSection === 'projects') renderProjects();
+    else if (state.currentSection === 'tasks') renderKanban();
+    else if (state.currentSection === 'team') renderTeam();
+    else if (state.currentSection === 'calendar') renderCalendar();
+    else if (state.currentSection === 'reports') renderReports();
+    showToast('数据已在其他标签页更新，已自动同步', 'info');
   });
 }
 

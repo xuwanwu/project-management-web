@@ -50,12 +50,11 @@
         </nav>
         <div class="sidebar-footer">
             <div class="user-info">
-                <div class="user-avatar">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div class="user-details">
-                    <span class="user-name">管理员</span>
-                    <span class="user-role">项目经理</span>
+                <div class="user-avatar" id="currentUserAvatar" style="background:#4f46e5;font-size:0.875rem;display:flex;align-items:center;justify-content:center;color:white">张</div>
+                <div class="user-details" style="flex:1;min-width:0">
+                    <select id="currentUserSelect" onchange="changeCurrentUser(this.value)"
+                        style="background:none;border:none;color:inherit;font-size:0.875rem;font-weight:600;cursor:pointer;width:100%;padding:0"></select>
+                    <span class="user-role" id="currentUserRole">项目经理</span>
                 </div>
             </div>
         </div>
@@ -71,7 +70,7 @@
             <div class="header-right">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" placeholder="搜索项目或任务..." id="searchInput" oninput="handleSearch(this.value)">
+                    <input type="text" placeholder="搜索项目或任务..." id="searchInput" oninput="debouncedSearch(this.value)">
                 </div>
                 <button class="btn btn-primary" onclick="openModal('createProjectModal')">
                     <i class="fas fa-plus"></i> 新建项目
@@ -232,6 +231,11 @@
                         <option value="medium">中</option>
                         <option value="low">低</option>
                     </select>
+                    <select class="form-select" id="kanbanSortBy" onchange="renderKanban()">
+                        <option value="default">默认排序</option>
+                        <option value="priority">按优先级</option>
+                        <option value="due">按截止日期</option>
+                    </select>
                 </div>
                 <button class="btn btn-primary" onclick="openModal('createTaskModal')">
                     <i class="fas fa-plus"></i> 新建任务
@@ -301,6 +305,16 @@
                     <div class="calendar-days" id="calendarDays"></div>
                 </div>
             </div>
+            <!-- 点击日期后的当天任务面板 -->
+            <div class="card" id="dayTasksPanel" style="margin-top:1rem;display:none">
+                <div class="card-header">
+                    <h2 id="dayTasksTitle">当天任务</h2>
+                    <button class="btn btn-sm" id="dayTasksCreateBtn" onclick="">
+                        <i class="fas fa-plus"></i> 在此日创建任务
+                    </button>
+                </div>
+                <div id="dayTasksList"></div>
+            </div>
             <div class="card" style="margin-top: 1rem;">
                 <div class="card-header">
                     <h2>本月截止任务</h2>
@@ -311,12 +325,19 @@
 
         <!-- 报表分析 -->
         <section class="section" id="section-reports">
+            <input type="file" id="dataImportInput" accept=".json" style="display:none" onchange="importData(this)">
             <div class="reports-toolbar">
                 <button class="btn btn-sm" onclick="exportProjectsCSV()">
                     <i class="fas fa-download"></i> 导出项目
                 </button>
                 <button class="btn btn-sm" onclick="exportTasksCSV()">
                     <i class="fas fa-download"></i> 导出任务
+                </button>
+                <button class="btn btn-sm" onclick="exportAllData()" style="background:var(--success);color:white">
+                    <i class="fas fa-database"></i> 备份数据
+                </button>
+                <button class="btn btn-sm" onclick="document.getElementById('dataImportInput').click()" style="background:var(--warning);color:white">
+                    <i class="fas fa-upload"></i> 恢复数据
                 </button>
             </div>
             <div class="reports-grid">
@@ -513,6 +534,39 @@
             <div class="modal-footer">
                 <button class="btn btn-danger" onclick="deleteCurrentTask()">删除</button>
                 <button class="btn btn-primary" onclick="saveTaskDetail()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认操作模态框 -->
+    <div class="modal" id="confirmModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2 id="confirmTitle">确认操作</h2>
+            </div>
+            <div class="modal-body">
+                <div class="confirm-icon" id="confirmIcon"><i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i></div>
+                <p class="confirm-message" id="confirmMessage"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('confirmModal')">取消</button>
+                <button class="btn btn-danger" id="confirmOkBtn" onclick="executeConfirm()">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 项目成员管理模态框 -->
+    <div class="modal" id="projectMembersModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>管理项目成员</h2>
+                <button class="modal-close" onclick="closeModal('projectMembersModal')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="projectMembersBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('projectMembersModal')">关闭</button>
             </div>
         </div>
     </div>
