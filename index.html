@@ -72,6 +72,9 @@
                     <i class="fas fa-search"></i>
                     <input type="text" placeholder="搜索项目或任务..." id="searchInput" oninput="debouncedSearch(this.value)">
                 </div>
+                <button class="btn btn-icon" id="darkModeBtn" onclick="toggleDarkMode()" title="切换深色模式">
+                    <i class="fas fa-moon"></i>
+                </button>
                 <button class="btn btn-primary" onclick="openModal('createProjectModal')">
                     <i class="fas fa-plus"></i> 新建项目
                 </button>
@@ -237,9 +240,23 @@
                         <option value="due">按截止日期</option>
                     </select>
                 </div>
+                <button class="btn btn-secondary" id="batchModeBtn" onclick="toggleBatchMode()">
+                    <i class="fas fa-check-square"></i> 批量选择
+                </button>
                 <button class="btn btn-primary" onclick="openModal('createTaskModal')">
                     <i class="fas fa-plus"></i> 新建任务
                 </button>
+            </div>
+            <!-- 批量操作栏 -->
+            <div class="batch-action-bar" id="batchActionBar" style="display:none">
+                <span id="batchCountLabel">已选 0 个任务</span>
+                <div class="batch-actions">
+                    <button class="btn btn-sm" onclick="batchSetStatus('done')"><i class="fas fa-check"></i> 标记完成</button>
+                    <button class="btn btn-sm" onclick="batchSetStatus('inprogress')"><i class="fas fa-play"></i> 进行中</button>
+                    <button class="btn btn-sm" onclick="batchSetStatus('todo')"><i class="fas fa-redo"></i> 重置待办</button>
+                    <button class="btn btn-sm btn-danger" onclick="batchDelete()"><i class="fas fa-trash"></i> 删除</button>
+                    <button class="btn btn-sm btn-secondary" onclick="toggleBatchMode()">取消</button>
+                </div>
             </div>
             <!-- 看板视图 -->
             <div class="kanban-board" id="kanbanBoard">
@@ -249,8 +266,9 @@
                         <h3>待办</h3>
                         <span class="task-count" id="count-todo">0</span>
                     </div>
-                    <div class="kanban-tasks" id="tasks-todo" 
-                         ondragover="allowDrop(event)" 
+                    <div class="kanban-tasks" id="tasks-todo"
+                         ondragover="allowDrop(event)"
+                         ondragleave="removeDragOver(event)"
                          ondrop="drop(event, 'todo')"></div>
                 </div>
                 <div class="kanban-column" id="col-inprogress">
@@ -261,6 +279,7 @@
                     </div>
                     <div class="kanban-tasks" id="tasks-inprogress"
                          ondragover="allowDrop(event)"
+                         ondragleave="removeDragOver(event)"
                          ondrop="drop(event, 'inprogress')"></div>
                 </div>
                 <div class="kanban-column" id="col-done">
@@ -271,6 +290,7 @@
                     </div>
                     <div class="kanban-tasks" id="tasks-done"
                          ondragover="allowDrop(event)"
+                         ondragleave="removeDragOver(event)"
                          ondrop="drop(event, 'done')"></div>
                 </div>
             </div>
@@ -534,6 +554,100 @@
             <div class="modal-footer">
                 <button class="btn btn-danger" onclick="deleteCurrentTask()">删除</button>
                 <button class="btn btn-primary" onclick="saveTaskDetail()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑项目模态框 -->
+    <div class="modal" id="editProjectModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>编辑项目</h2>
+                <button class="modal-close" onclick="closeModal('editProjectModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editProjectId">
+                <div class="form-group">
+                    <label>项目名称 *</label>
+                    <input type="text" class="form-input" id="editProjectName">
+                </div>
+                <div class="form-group">
+                    <label>项目描述</label>
+                    <textarea class="form-input" id="editProjectDesc" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" class="form-input" id="editProjectStart">
+                    </div>
+                    <div class="form-group">
+                        <label>截止日期</label>
+                        <input type="date" class="form-input" id="editProjectEnd">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select class="form-input" id="editProjectStatus">
+                            <option value="active">进行中</option>
+                            <option value="completed">已完成</option>
+                            <option value="paused">已暂停</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <select class="form-input" id="editProjectPriority">
+                            <option value="low">低</option>
+                            <option value="medium">中</option>
+                            <option value="high">高</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>项目颜色</label>
+                    <input type="color" class="form-input" id="editProjectColor">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="deleteProject(document.getElementById('editProjectId').value)">删除项目</button>
+                <button class="btn btn-secondary" onclick="closeModal('editProjectModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveEditProject()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑成员模态框 -->
+    <div class="modal" id="editMemberModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>编辑成员</h2>
+                <button class="modal-close" onclick="closeModal('editMemberModal')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editMemberId">
+                <div class="form-group">
+                    <label>姓名 *</label>
+                    <input type="text" class="form-input" id="editMemberName">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>职位</label>
+                        <input type="text" class="form-input" id="editMemberRole">
+                    </div>
+                    <div class="form-group">
+                        <label>邮箱</label>
+                        <input type="email" class="form-input" id="editMemberEmail">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>头像颜色</label>
+                    <input type="color" class="form-input" id="editMemberColor">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="deleteMember(document.getElementById('editMemberId').value)">删除成员</button>
+                <button class="btn btn-secondary" onclick="closeModal('editMemberModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveEditMember()">保存</button>
             </div>
         </div>
     </div>

@@ -1448,3 +1448,118 @@ body {
 
 /* 当前用户 select 样式 */
 #currentUserSelect option { color: #333; background: white; }
+
+/* ===== 第二轮优化补丁 ===== */
+
+/* 深色模式 */
+[data-theme="dark"] {
+    --bg-primary: #1e1e2e;
+    --bg-secondary: #181825;
+    --bg-tertiary: #11111b;
+    --text-primary: #cdd6f4;
+    --text-secondary: #bac2de;
+    --text-light: #6c7086;
+    --border: #45475a;
+    --primary: #89b4fa;
+    --primary-dark: #74c7ec;
+    --success: #a6e3a1;
+    --warning: #f9e2af;
+    --danger: #f38ba8;
+    --shadow: 0 1px 3px rgba(0,0,0,0.5);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.6);
+}
+[data-theme="dark"] .sidebar { background: #181825; border-right: 1px solid #45475a; }
+[data-theme="dark"] .kanban-task-card { background: #181825; border-color: #45475a; }
+[data-theme="dark"] .modal-content { background: #1e1e2e; }
+[data-theme="dark"] .form-input { background: #181825; color: #cdd6f4; border-color: #45475a; }
+[data-theme="dark"] .form-input:focus { border-color: #89b4fa; }
+[data-theme="dark"] .top-header { background: #181825; border-bottom-color: #45475a; }
+[data-theme="dark"] .search-box { background: #11111b; border-color: #45475a; }
+[data-theme="dark"] .search-box input { color: #cdd6f4; }
+[data-theme="dark"] .project-card { background: #181825; }
+[data-theme="dark"] .team-card { background: #181825; }
+[data-theme="dark"] .stat-card { background: #181825; }
+[data-theme="dark"] .card { background: #181825; border-color: #45475a; }
+[data-theme="dark"] .notification-dropdown { background: #1e1e2e; border-color: #45475a; }
+[data-theme="dark"] .notification-item:hover { background: #181825; }
+[data-theme="dark"] .btn-secondary { background: #45475a; color: #cdd6f4; }
+[data-theme="dark"] #darkModeBtn i::before { content: "\f185"; } /* sun icon */
+
+/* 拖拽放置区高亮 */
+.kanban-tasks.drag-over {
+    background: rgba(79,70,229,0.08);
+    border: 2px dashed var(--primary);
+    border-radius: var(--radius);
+    transition: background 0.15s;
+}
+
+/* 快捷完成按钮 */
+.kanban-task-card { position: relative; }
+.quick-done-btn {
+    position: absolute;
+    top: 0.4rem; right: 0.4rem;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; color: var(--text-light);
+    opacity: 0; transition: opacity 0.15s, background 0.15s;
+    z-index: 2;
+}
+.kanban-task-card:hover .quick-done-btn { opacity: 1; }
+.quick-done-btn:hover { background: var(--success); color: white; border-color: var(--success); }
+.kanban-task-card.status-done .quick-done-btn { opacity: 1; background: var(--success); color: white; border-color: var(--success); }
+
+/* 搜索关键词高亮 */
+mark { background: #fef08a; color: #1e1e2e; border-radius: 2px; padding: 0 1px; }
+[data-theme="dark"] mark { background: #f9e2af; color: #1e1e2e; }
+
+/* 批量选择 */
+.task-select-cb {
+    position: absolute; top: 0.4rem; left: 0.4rem;
+    width: 16px; height: 16px; cursor: pointer;
+    opacity: 0; transition: opacity 0.15s;
+    z-index: 2;
+}
+.batch-mode .task-select-cb { opacity: 1; }
+.batch-mode .kanban-task-card { cursor: default; padding-left: 2rem; }
+.kanban-task-card.selected-task { border-color: var(--primary); background: rgba(79,70,229,0.06); }
+.batch-action-bar {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    background: var(--primary);
+    color: white; border-radius: var(--radius);
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+.batch-action-bar .batch-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.batch-action-bar .btn { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+.batch-action-bar .btn:hover { background: rgba(255,255,255,0.35); }
+.batch-action-bar .btn-danger { background: #f38ba8; border-color: transparent; }
+.batch-action-bar .btn-secondary { background: rgba(0,0,0,0.2); }
+
+/* 撤销 Toast */
+.undo-toast { display: flex; align-items: center; gap: 0.5rem; min-width: 260px; }
+.undo-toast .undo-btn {
+    margin-left: auto; padding: 0.2rem 0.6rem;
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: var(--radius); cursor: pointer;
+    background: transparent; color: white; font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.undo-toast .undo-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* 深色模式切换按钮 */
+#darkModeBtn { font-size: 0.9rem; }
+
+/* 评论删除按钮 */
+.comment-delete-btn {
+    margin-left: auto; opacity: 0;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-light); font-size: 0.75rem;
+    transition: opacity 0.15s, color 0.15s;
+}
+.comment-item:hover .comment-delete-btn { opacity: 1; }
+.comment-delete-btn:hover { color: var(--danger); }

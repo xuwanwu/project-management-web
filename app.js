@@ -159,6 +159,7 @@ function saveData() {
     localStorage.setItem('pm_tasks', JSON.stringify(state.tasks));
     localStorage.setItem('pm_members', JSON.stringify(state.members));
     localStorage.setItem('pm_activities', JSON.stringify(state.activities));
+    localStorage.setItem('pm_notifications', JSON.stringify(state.notifications));
   } catch (e) {
     console.error('saveData error:', e);
     showToast('数据保存失败：存储空间不足，请清理浏览器缓存', 'error');
@@ -173,6 +174,7 @@ function loadData() {
       state.tasks = JSON.parse(localStorage.getItem('pm_tasks') || '[]');
       state.members = JSON.parse(localStorage.getItem('pm_members') || '[]');
       state.activities = JSON.parse(localStorage.getItem('pm_activities') || '[]');
+      state.notifications = JSON.parse(localStorage.getItem('pm_notifications') || '[]');
       // 向前兼容：补齐缺失字段
       state.projects.forEach(p => { if (!p.milestones) p.milestones = []; });
       state.tasks.forEach(t => {
@@ -203,12 +205,32 @@ function genId(prefix) {
   return prefix + Date.now() + Math.random().toString(36).slice(2, 6);
 }
 
+// ===== XSS 防护 =====
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function highlightText(text, query) {
+  const safe = escHtml(text);
+  if (!query) return safe;
+  const escapedQ = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return safe.replace(new RegExp(escapedQ, 'gi'), '<mark>$&</mark>');
+}
+
 // ===== 防抖 =====
 function debounce(fn, delay) {
   let timer;
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
 }
 const debouncedSearch = debounce(handleSearch, 300);
+
+// ===== 焦点管理 =====
+let _lastFocus = null;
 
 // ===== 确认对话框 =====
 let _confirmCallback = null;
@@ -323,17 +345,17 @@ function openProjectMembers(projectId) {
 
 function renderProjectMembersModal(project) {
   document.getElementById('projectMembersBody').innerHTML = `
-    <p style="margin-bottom:1rem;color:var(--text-secondary)">项目：<strong>${project.name}</strong></p>
+    <p style="margin-bottom:1rem;color:var(--text-secondary)">项目：<strong>${escHtml(project.name)}</strong></p>
     <div class="member-toggle-list">
       ${state.members.length === 0 ? '<div style="padding:1rem;text-align:center;color:var(--text-light)">暂无成员，请先添加团队成员</div>' :
         state.members.map(m => {
           const isMember = (project.members || []).includes(m.id);
           return `<div class="member-toggle-item ${isMember ? 'member-in-project' : ''}">
             <div class="member-toggle-info">
-              <div class="member-toggle-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+              <div class="member-toggle-avatar" style="background:${m.color}">${escHtml(getInitials(m.name))}</div>
               <div>
-                <div style="font-weight:600;font-size:0.875rem">${m.name}</div>
-                <div style="font-size:0.75rem;color:var(--text-secondary)">${m.role}</div>
+                <div style="font-weight:600;font-size:0.875rem">${escHtml(m.name)}</div>
+                <div style="font-size:0.75rem;color:var(--text-secondary)">${escHtml(m.role)}</div>
               </div>
             </div>
             <button class="btn btn-sm ${isMember ? 'btn-danger' : 'btn-primary'}"
@@ -365,12 +387,159 @@ function toggleProjectMember(projectId, memberId) {
   if (state.currentSection === 'projects') renderProjects();
 }
 
+// ===== 项目编辑/删除 =====
+function openEditProjectModal(projectId) {
+  const p = getProject(projectId);
+  if (!p) return;
+  document.getElementById('editProjectId').value = p.id;
+  document.getElementById('editProjectName').value = p.name;
+  document.getElementById('editProjectDesc').value = p.description || '';
+  document.getElementById('editProjectStart').value = p.startDate || '';
+  document.getElementById('editProjectEnd').value = p.endDate || '';
+  document.getElementById('editProjectStatus').value = p.status || 'active';
+  document.getElementById('editProjectPriority').value = p.priority || 'medium';
+  document.getElementById('editProjectColor').value = p.color || '#4f46e5';
+  openModal('editProjectModal');
+}
+
+function saveEditProject() {
+  const id = document.getElementById('editProjectId').value;
+  const p = getProject(id);
+  if (!p) return;
+  if (!validateField('editProjectName', '项目名称')) return;
+  p.name = document.getElementById('editProjectName').value.trim();
+  p.description = document.getElementById('editProjectDesc').value.trim();
+  p.startDate = document.getElementById('editProjectStart').value;
+  p.endDate = document.getElementById('editProjectEnd').value;
+  p.status = document.getElementById('editProjectStatus').value;
+  p.priority = document.getElementById('editProjectPriority').value;
+  p.color = document.getElementById('editProjectColor').value;
+  addActivity(state.currentUserId, '更新了项目', p.name);
+  saveData();
+  closeModal('editProjectModal');
+  showToast(`项目 "${escHtml(p.name)}" 已更新`);
+  if (state.currentSection === 'projects') renderProjects();
+  if (state.currentSection === 'dashboard') renderDashboard();
+}
+
+function deleteProject(projectId) {
+  const p = getProject(projectId);
+  if (!p) return;
+  const taskCount = state.tasks.filter(t => t.projectId === projectId).length;
+  confirmAction(
+    '删除项目',
+    `确定要删除项目 "${p.name}" 吗？其下 ${taskCount} 个任务也将被永久删除，此操作不可撤销。`,
+    () => {
+      const taskIds = state.tasks.filter(t => t.projectId === projectId).map(t => t.id);
+      state.tasks = state.tasks.filter(t => t.projectId !== projectId);
+      // 清除其他任务对已删任务的依赖
+      state.tasks.forEach(t => { if (taskIds.includes(t.dependsOn)) t.dependsOn = null; });
+      state.projects = state.projects.filter(pr => pr.id !== projectId);
+      addActivity(state.currentUserId, '删除了项目', p.name);
+      saveData();
+      generateNotifications();
+      closeModal('editProjectModal');
+      showToast(`项目 "${escHtml(p.name)}" 已删除`, 'info');
+      if (state.currentSection === 'projects') renderProjects();
+      if (state.currentSection === 'dashboard') renderDashboard();
+    }
+  );
+}
+
+// ===== 成员编辑/删除 =====
+function openEditMemberModal(memberId) {
+  const m = getMember(memberId);
+  if (!m) return;
+  document.getElementById('editMemberId').value = m.id;
+  document.getElementById('editMemberName').value = m.name;
+  document.getElementById('editMemberRole').value = m.role || '';
+  document.getElementById('editMemberEmail').value = m.email || '';
+  document.getElementById('editMemberColor').value = m.color || '#4f46e5';
+  openModal('editMemberModal');
+}
+
+function saveEditMember() {
+  const id = document.getElementById('editMemberId').value;
+  const m = getMember(id);
+  if (!m) return;
+  if (!validateField('editMemberName', '成员姓名')) return;
+  m.name = document.getElementById('editMemberName').value.trim();
+  m.role = document.getElementById('editMemberRole').value.trim();
+  m.email = document.getElementById('editMemberEmail').value.trim();
+  m.color = document.getElementById('editMemberColor').value;
+  saveData();
+  initCurrentUser();
+  closeModal('editMemberModal');
+  showToast(`成员 "${escHtml(m.name)}" 已更新`);
+  if (state.currentSection === 'team') renderTeam();
+}
+
+function deleteMember(memberId) {
+  const m = getMember(memberId);
+  if (!m) return;
+  confirmAction(
+    '删除成员',
+    `确定要删除成员 "${m.name}" 吗？其负责的任务将变为未分配状态。`,
+    () => {
+      state.tasks.forEach(t => { if (t.assigneeId === memberId) t.assigneeId = ''; });
+      state.projects.forEach(p => {
+        if (p.members) p.members = p.members.filter(mid => mid !== memberId);
+      });
+      state.members = state.members.filter(mem => mem.id !== memberId);
+      if (state.currentUserId === memberId) {
+        state.currentUserId = state.members[0]?.id || '';
+        try { localStorage.setItem('pm_currentUser', state.currentUserId); } catch (e) {}
+      }
+      saveData();
+      initCurrentUser();
+      closeModal('editMemberModal');
+      showToast(`成员 "${escHtml(m.name)}" 已删除`, 'info');
+      if (state.currentSection === 'team') renderTeam();
+    }
+  );
+}
+
+// ===== 快捷完成任务 =====
+function quickDoneTask(taskId) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  if (task.status !== 'done' && !checkDependencies(task)) return;
+  const prevStatus = task.status;
+  task.status = task.status === 'done' ? 'todo' : 'done';
+  addActivity(state.currentUserId, task.status === 'done' ? '完成了任务' : '重新开启了任务', task.name);
+  saveUndo(`任务 "${escHtml(task.name)}" 状态已变更`, () => {
+    task.status = prevStatus;
+    saveData();
+    generateNotifications();
+    if (state.currentSection === 'tasks') renderKanban();
+    if (state.currentSection === 'dashboard') renderDashboard();
+  });
+  saveData();
+  generateNotifications();
+  if (state.currentSection === 'tasks') renderKanban();
+  if (state.currentSection === 'dashboard') renderDashboard();
+}
+
 // ===== 依赖校验 =====
+function hasDependencyCycle(taskId, newDependsOnId) {
+  if (!newDependsOnId || newDependsOnId === taskId) return newDependsOnId === taskId;
+  const visited = new Set();
+  let cur = newDependsOnId;
+  while (cur) {
+    if (cur === taskId) return true;
+    if (visited.has(cur)) break;
+    visited.add(cur);
+    const dep = state.tasks.find(t => t.id === cur);
+    cur = dep?.dependsOn || null;
+  }
+  return false;
+}
+
 function checkDependencies(task) {
   if (!task.dependsOn) return true;
   const dep = state.tasks.find(t => t.id === task.dependsOn);
   if (dep && dep.status !== 'done') {
-    showToast(`无法完成：前置任务 "${dep.name}" 尚未完成`, 'error');
+    showToast(`无法完成：前置任务 "${escHtml(dep.name)}" 尚未完成`, 'error');
     return false;
   }
   return true;
@@ -610,8 +779,8 @@ function renderMilestones(project) {
         <div class="ms-check ${ms.completed ? 'done' : ''}" onclick="event.stopPropagation();toggleMilestone('${project.id}','${ms.id}')">
           ${ms.completed ? '<i class="fas fa-check"></i>' : ''}
         </div>
-        <span class="ms-name ${ms.completed ? 'done' : ''}">${ms.name}</span>
-        <span class="ms-due ${overdue ? 'overdue' : ''}">${ms.dueDate || '-'}</span>
+        <span class="ms-name ${ms.completed ? 'done' : ''}">${escHtml(ms.name)}</span>
+        <span class="ms-due ${overdue ? 'overdue' : ''}">${escHtml(ms.dueDate || '-')}</span>
       </div>`;
     }).join('')}
   </div>`;
@@ -664,6 +833,7 @@ function exportProjectsCSV() {
 // ===== 导航 =====
 function showSection(section) {
   state.currentSection = section;
+  history.replaceState(null, '', '#' + section);
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + section).classList.add('active');
   const navItems = document.querySelectorAll('.nav-item');
@@ -711,14 +881,27 @@ function openModal(id) {
     });
     const col = document.getElementById('memberColor'); if (col) col.value = '#4f46e5';
   }
-  document.getElementById(id).classList.add('active');
+  _lastFocus = document.activeElement;
+  const modal = document.getElementById(id);
+  modal.classList.add('active');
   document.getElementById('overlay').classList.add('active');
+  // 焦点陷阱：将焦点移入弹窗
+  setTimeout(() => {
+    const focusable = modal.querySelector('button:not([disabled]), input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable) focusable.focus();
+  }, 60);
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('active');
+  clearAllErrors();
   const anyActive = document.querySelectorAll('.modal.active').length > 0;
   if (!anyActive) document.getElementById('overlay').classList.remove('active');
+  // 恢复焦点
+  if (_lastFocus && typeof _lastFocus.focus === 'function') {
+    try { _lastFocus.focus(); } catch (e) {}
+    _lastFocus = null;
+  }
 }
 
 function closeAllModals() {
@@ -743,8 +926,11 @@ function getProject(id) { return state.projects.find(p => p.id === id); }
 
 function formatDate(dateStr) {
   if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '-';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  } catch (e) { return '-'; }
 }
 
 function isOverdue(task) {
@@ -787,7 +973,7 @@ function renderProjectProgress() {
     return `<div class="project-progress-item">
       <div class="project-color-dot" style="background:${p.color}"></div>
       <div class="project-progress-info">
-        <h4>${p.name}</h4>
+        <h4>${escHtml(p.name)}</h4>
         <div class="progress-bar"><div class="progress-fill" style="width:${progress}%;background:${p.color}"></div></div>
       </div>
       <span class="progress-text">${progress}%</span>
@@ -801,7 +987,7 @@ function renderRecentTasks() {
   document.getElementById('recentTasksList').innerHTML = tasks.map(t => `
     <div class="recent-task-item" onclick="openTaskDetail('${t.id}')">
       <div class="task-priority-dot priority-${t.priority}"></div>
-      <div class="recent-task-info"><h4>${t.name}</h4><span>${formatDate(t.dueDate)}</span></div>
+      <div class="recent-task-info"><h4>${escHtml(t.name)}</h4><span>${formatDate(t.dueDate)}</span></div>
       <span class="task-status-badge status-${t.status}">${statusLabels[t.status]}</span>
     </div>`).join('');
 }
@@ -811,10 +997,10 @@ function renderActivityList() {
     const m = getMember(a.memberId);
     if (!m) return '';
     return `<div class="activity-item">
-      <div class="activity-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+      <div class="activity-avatar" style="background:${m.color}">${escHtml(getInitials(m.name))}</div>
       <div class="activity-content">
-        <p><strong>${m.name}</strong> ${a.action} <strong>${a.target}</strong></p>
-        <span class="activity-time">${a.time}</span>
+        <p><strong>${escHtml(m.name)}</strong> ${escHtml(a.action)} <strong>${escHtml(a.target)}</strong></p>
+        <span class="activity-time">${escHtml(a.time)}</span>
       </div>
     </div>`;
   }).join('');
@@ -868,23 +1054,28 @@ function renderProjects() {
     const totalMs = (p.milestones || []).length;
     const membersHtml = (p.members || []).slice(0, 4).map(mid => {
       const m = getMember(mid);
-      return m ? `<div class="project-member-avatar" style="background:${m.color}" title="${m.name}">${getInitials(m.name)}</div>` : '';
+      return m ? `<div class="project-member-avatar" style="background:${m.color}" title="${escHtml(m.name)}">${escHtml(getInitials(m.name))}</div>` : '';
     }).join('');
     return `
       <div class="project-card" style="border-left-color:${p.color}" onclick="showSection('tasks')">
         <div class="project-card-header">
-          <h3>${p.name}</h3>
-          <div style="display:flex;align-items:center;gap:0.5rem">
+          <h3 title="${escHtml(p.name)}">${escHtml(p.name)}</h3>
+          <div style="display:flex;align-items:center;gap:0.4rem">
             <span class="project-status status-${p.status}">${statusLabels[p.status]}</span>
             <button class="btn btn-sm btn-icon" title="管理成员"
               onclick="event.stopPropagation();openProjectMembers('${p.id}')"
               style="padding:0.2rem 0.4rem;font-size:0.75rem">
               <i class="fas fa-users-cog"></i>
             </button>
+            <button class="btn btn-sm btn-icon" title="编辑项目"
+              onclick="event.stopPropagation();openEditProjectModal('${p.id}')"
+              style="padding:0.2rem 0.4rem;font-size:0.75rem">
+              <i class="fas fa-edit"></i>
+            </button>
           </div>
         </div>
         <div class="project-card-body">
-          <p>${p.description}</p>
+          <p>${escHtml(p.description)}</p>
           <div class="project-meta">
             <span><i class="fas fa-calendar"></i> ${formatDate(p.endDate)}</span>
             <span><i class="fas fa-tasks"></i> ${taskCount} 任务</span>
@@ -1002,31 +1193,41 @@ function renderTaskCard(task) {
   const member = getMember(task.assigneeId);
   const project = getProject(task.projectId);
   const overdue = isOverdue(task);
-  const tagsHtml = (task.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('');
+  const tagsHtml = (task.tags || []).map(tag => `<span class="tag">${escHtml(tag)}</span>`).join('');
+  const isSelected = state.selectedTaskIds && state.selectedTaskIds.has(task.id);
+  const batchMode = state.batchMode;
+  const isDone = task.status === 'done';
 
-  // P1: 检查依赖是否未完成
+  // 检查依赖是否未完成
   let depWarn = '';
   if (task.dependsOn) {
     const dep = state.tasks.find(t => t.id === task.dependsOn);
     if (dep && dep.status !== 'done') {
-      depWarn = `<div class="dep-warning"><i class="fas fa-exclamation-triangle"></i>依赖 "${dep.name}" 未完成</div>`;
+      depWarn = `<div class="dep-warning"><i class="fas fa-exclamation-triangle"></i>依赖 "${escHtml(dep.name)}" 未完成</div>`;
     }
   }
 
-  return `<div class="kanban-task-card ${overdue ? 'task-overdue' : ''}"
+  const cardClick = batchMode ? `toggleTaskSelect('${task.id}')` : `openTaskDetail('${task.id}')`;
+
+  return `<div class="kanban-task-card ${overdue ? 'task-overdue' : ''} ${isDone ? 'status-done' : ''} ${isSelected ? 'selected-task' : ''}"
        data-task-id="${task.id}"
-       draggable="true"
+       draggable="${batchMode ? 'false' : 'true'}"
        ondragstart="drag(event, '${task.id}')"
-       onclick="openTaskDetail('${task.id}')">
+       onclick="${cardClick}">
+    ${batchMode ? `<input type="checkbox" class="task-select-cb" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation();toggleTaskSelect('${task.id}')">` : ''}
+    <button class="quick-done-btn" title="${isDone ? '取消完成' : '标记完成'}"
+      onclick="event.stopPropagation();quickDoneTask('${task.id}')">
+      <i class="fas fa-check"></i>
+    </button>
     ${tagsHtml ? `<div class="kanban-task-tags">${tagsHtml}</div>` : ''}
-    <div class="kanban-task-title">${task.name}</div>
+    <div class="kanban-task-title" title="${escHtml(task.name)}" style="padding-right:1.5rem">${escHtml(task.name)}</div>
     <div class="kanban-task-meta">
       <span style="color:${overdue ? 'var(--danger)' : 'inherit'}">
         <i class="fas fa-calendar-alt"></i> ${formatDate(task.dueDate)}
       </span>
-      ${member ? `<div class="kanban-task-assignee" style="background:${member.color}" title="${member.name}">${getInitials(member.name)}</div>` : ''}
+      ${member ? `<div class="kanban-task-assignee" style="background:${member.color}" title="${escHtml(member.name)}">${escHtml(getInitials(member.name))}</div>` : ''}
     </div>
-    ${project ? `<div style="margin-top:0.35rem;font-size:0.7rem;color:var(--text-light)"><i class="fas fa-folder"></i> ${project.name}</div>` : ''}
+    ${project ? `<div style="margin-top:0.35rem;font-size:0.7rem;color:var(--text-light)"><i class="fas fa-folder"></i> ${escHtml(project.name)}</div>` : ''}
     ${depWarn}
   </div>`;
 }
@@ -1075,10 +1276,16 @@ function drag(event, taskId) {
 function allowDrop(event) {
   event.preventDefault();
   event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('drag-over');
+}
+
+function removeDragOver(event) {
+  event.currentTarget.classList.remove('drag-over');
 }
 
 function drop(event, newStatus) {
   event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
   if (!draggedTaskId) return;
   const task = state.tasks.find(t => t.id === draggedTaskId);
   if (task && task.status !== newStatus) {
@@ -1108,7 +1315,7 @@ function openTaskDetail(taskId) {
   // 同一项目下的其他任务（依赖选项）
   const projectTasks = state.tasks.filter(t => t.projectId === task.projectId && t.id !== task.id);
   const depOptions = `<option value="">无</option>` +
-    projectTasks.map(t => `<option value="${t.id}" ${task.dependsOn === t.id ? 'selected' : ''}>${t.name}</option>`).join('');
+    projectTasks.map(t => `<option value="${t.id}" ${task.dependsOn === t.id ? 'selected' : ''}>${escHtml(t.name)}</option>`).join('');
 
   document.getElementById('taskDetailBody').innerHTML = `
     <div class="form-group">
@@ -1169,24 +1376,35 @@ function openTaskDetail(taskId) {
   openModal('taskDetailModal');
 }
 
-// ===== P1: 评论 =====
+/// ===== P1: 评论 =====
 function renderComments(task) {
   if (!task.comments || !task.comments.length) {
     return '<div style="padding:0.5rem 0;color:var(--text-light);font-size:0.825rem">暂无评论，来说点什么吧</div>';
   }
   return task.comments.map(c => {
     const m = getMember(c.memberId) || { name: '未知', color: '#94a3b8' };
+    const canDelete = c.memberId === state.currentUserId;
     return `<div class="comment-item">
-      <div class="comment-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
+      <div class="comment-avatar" style="background:${m.color}">${escHtml(getInitials(m.name))}</div>
       <div class="comment-bubble">
         <div class="comment-meta">
-          <span class="comment-author">${m.name}</span>
-          <span class="comment-time-text">${c.timestamp}</span>
+          <span class="comment-author">${escHtml(m.name)}</span>
+          <span class="comment-time-text">${escHtml(c.timestamp)}</span>
+          ${canDelete ? `<button class="comment-delete-btn" title="删除评论" onclick="deleteComment('${task.id}','${c.id}')"><i class="fas fa-trash-alt"></i></button>` : ''}
         </div>
-        <div class="comment-text">${c.text}</div>
+        <div class="comment-text">${escHtml(c.text)}</div>
       </div>
     </div>`;
   }).join('');
+}
+
+function deleteComment(taskId, commentId) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+  task.comments = (task.comments || []).filter(c => c.id !== commentId);
+  saveData();
+  document.getElementById('commentsContainer').innerHTML = renderComments(task);
+  showToast('评论已删除', 'info');
 }
 
 function handleCommentKey(e) {
@@ -1244,20 +1462,28 @@ function deleteCurrentTask() {
     `确定要删除任务 "${task?.name || ''}" 吗？其他任务对它的依赖也将被清除，此操作不可撤销。`,
     () => {
       const taskId = state.currentTaskId;
+      const taskSnapshot = { ...task, comments: [...(task.comments || [])] };
+      const affectedTasks = state.tasks.filter(t => t.dependsOn === taskId).map(t => ({ id: t.id, dep: t.dependsOn }));
       state.tasks = state.tasks.filter(t => t.id !== taskId);
       state.tasks.forEach(t => { if (t.dependsOn === taskId) t.dependsOn = null; });
       if (task) addActivity(state.currentUserId, '删除了任务', task.name);
       saveData();
       generateNotifications();
       closeModal('taskDetailModal');
-      showToast('任务已删除', 'info');
+      saveUndo(`任务 "${escHtml(taskSnapshot.name)}" 已删除`, () => {
+        state.tasks.unshift(taskSnapshot);
+        affectedTasks.forEach(({ id, dep }) => { const t = state.tasks.find(x => x.id === id); if (t) t.dependsOn = dep; });
+        saveData(); generateNotifications();
+        if (state.currentSection === 'tasks') renderKanban();
+        if (state.currentSection === 'dashboard') renderDashboard();
+      });
       if (state.currentSection === 'tasks') renderKanban();
       if (state.currentSection === 'dashboard') renderDashboard();
     }
   );
 }
 
-// ===== P2: 团队成员（含负载预警）=====
+/// ===== P2: 团队成员（含负载预警）=====
 function renderTeam() {
   document.getElementById('teamGrid').innerHTML = state.members.map(m => {
     const allTasks = state.tasks.filter(t => t.assigneeId === m.id);
@@ -1265,10 +1491,16 @@ function renderTeam() {
     const doneTasks = allTasks.filter(t => t.status === 'done').length;
     const overloaded = activeTasks >= OVERLOAD_THRESHOLD;
     return `<div class="team-card ${overloaded ? 'overloaded' : ''}">
-      <div class="team-avatar" style="background:${m.color}">${getInitials(m.name)}</div>
-      <h3>${m.name}${overloaded ? '<span class="overload-tag">超载</span>' : ''}</h3>
-      <p class="team-role">${m.role}</p>
-      <p class="team-email">${m.email}</p>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem">
+        <div class="team-avatar" style="background:${m.color}">${escHtml(getInitials(m.name))}</div>
+        <button class="btn btn-sm btn-icon" title="编辑成员" onclick="openEditMemberModal('${m.id}')"
+          style="padding:0.2rem 0.4rem;font-size:0.75rem;opacity:0.7">
+          <i class="fas fa-edit"></i>
+        </button>
+      </div>
+      <h3>${escHtml(m.name)}${overloaded ? '<span class="overload-tag">超载</span>' : ''}</h3>
+      <p class="team-role">${escHtml(m.role)}</p>
+      <p class="team-email">${escHtml(m.email)}</p>
       ${overloaded ? `<p style="font-size:0.75rem;color:var(--danger);margin-bottom:0.75rem"><i class="fas fa-exclamation-triangle"></i> 活跃任务过多（${activeTasks}个），建议重新分配</p>` : ''}
       <div class="team-stats">
         <div class="team-stat"><div class="stat-number">${allTasks.length}</div><div class="stat-label">总任务</div></div>
@@ -1462,7 +1694,7 @@ function renderBurndownChart() {
   });
 }
 
-// ===== 搜索 =====
+// ===== 搜索（含关键词高亮）=====
 function handleSearch(query) {
   const q = query.toLowerCase().trim();
   if (!q) {
@@ -1476,8 +1708,8 @@ function handleSearch(query) {
     document.getElementById('projectsContainer').innerHTML = filtered.map(p => {
       const progress = calcProjectProgress(p.id);
       return `<div class="project-card" style="border-left-color:${p.color}">
-        <div class="project-card-header"><h3>${p.name}</h3><span class="project-status status-${p.status}">${statusLabels[p.status]}</span></div>
-        <div class="project-card-body"><p>${p.description}</p></div>
+        <div class="project-card-header"><h3>${highlightText(p.name, q)}</h3><span class="project-status status-${p.status}">${statusLabels[p.status]}</span></div>
+        <div class="project-card-body"><p>${highlightText(p.description || '', q)}</p></div>
         <div class="project-card-footer"><span style="font-size:0.75rem;color:var(--text-secondary)">${progress}%</span></div>
       </div>`;
     }).join('') || '<div style="padding:2rem;text-align:center;color:var(--text-light)">未找到相关项目</div>';
@@ -1488,16 +1720,183 @@ function handleSearch(query) {
     filtered.forEach(t => { if (columns[t.status]) columns[t.status].push(t); });
     Object.keys(columns).forEach(status => {
       document.getElementById(`count-${status}`).textContent = columns[status].length;
-      document.getElementById(`tasks-${status}`).innerHTML = columns[status].map(renderTaskCard).join('');
+      // 搜索结果中高亮任务名
+      document.getElementById(`tasks-${status}`).innerHTML = columns[status].map(t => {
+        const card = renderTaskCard(t);
+        // 替换任务标题为高亮版本
+        return card.replace(
+          `>${escHtml(t.name)}</div>`,
+          `>${highlightText(t.name, q)}</div>`
+        );
+      }).join('');
     });
   }
+}
+
+// ===== 批量任务操作 =====
+function toggleBatchMode() {
+  state.batchMode = !state.batchMode;
+  state.selectedTaskIds = new Set();
+  const btn = document.getElementById('batchModeBtn');
+  const bar = document.getElementById('batchActionBar');
+  const board = document.getElementById('kanbanBoard');
+  if (state.batchMode) {
+    btn.innerHTML = '<i class="fas fa-times"></i> 退出选择';
+    btn.classList.add('btn-danger');
+    btn.classList.remove('btn-secondary');
+    bar.style.display = 'flex';
+    board.classList.add('batch-mode');
+  } else {
+    btn.innerHTML = '<i class="fas fa-check-square"></i> 批量选择';
+    btn.classList.remove('btn-danger');
+    btn.classList.add('btn-secondary');
+    bar.style.display = 'none';
+    board.classList.remove('batch-mode');
+  }
+  renderKanban();
+}
+
+function toggleTaskSelect(taskId) {
+  if (!state.selectedTaskIds) state.selectedTaskIds = new Set();
+  if (state.selectedTaskIds.has(taskId)) {
+    state.selectedTaskIds.delete(taskId);
+  } else {
+    state.selectedTaskIds.add(taskId);
+  }
+  const count = state.selectedTaskIds.size;
+  document.getElementById('batchCountLabel').textContent = `已选 ${count} 个任务`;
+  // 仅更新该卡片的选中状态，避免全量重绘
+  const card = document.querySelector(`[data-task-id="${taskId}"]`);
+  if (card) {
+    card.classList.toggle('selected-task', state.selectedTaskIds.has(taskId));
+    const cb = card.querySelector('.task-select-cb');
+    if (cb) cb.checked = state.selectedTaskIds.has(taskId);
+  }
+}
+
+function batchSetStatus(newStatus) {
+  if (!state.selectedTaskIds || state.selectedTaskIds.size === 0) {
+    showToast('请先选择任务', 'info'); return;
+  }
+  let blocked = 0;
+  state.selectedTaskIds.forEach(id => {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+    if (newStatus === 'done' && !checkDependencies(task)) { blocked++; return; }
+    task.status = newStatus;
+  });
+  saveData();
+  generateNotifications();
+  const statusLabels = { todo: '待办', inprogress: '进行中', done: '已完成' };
+  showToast(`已将 ${state.selectedTaskIds.size - blocked} 个任务标记为「${statusLabels[newStatus]}」`);
+  if (blocked > 0) showToast(`${blocked} 个任务因依赖未完成无法标记`, 'error');
+  state.selectedTaskIds = new Set();
+  renderKanban();
+}
+
+function batchDelete() {
+  if (!state.selectedTaskIds || state.selectedTaskIds.size === 0) {
+    showToast('请先选择任务', 'info'); return;
+  }
+  const count = state.selectedTaskIds.size;
+  confirmAction('批量删除', `确定要删除选中的 ${count} 个任务吗？此操作不可撤销。`, () => {
+    const ids = [...state.selectedTaskIds];
+    state.tasks = state.tasks.filter(t => !ids.includes(t.id));
+    state.tasks.forEach(t => { if (ids.includes(t.dependsOn)) t.dependsOn = null; });
+    addActivity(state.currentUserId, `批量删除了 ${count} 个任务`, '');
+    saveData();
+    generateNotifications();
+    state.selectedTaskIds = new Set();
+    showToast(`已删除 ${count} 个任务`, 'info');
+    renderKanban();
+    if (state.currentSection === 'dashboard') renderDashboard();
+  });
+}
+
+// ===== 深色模式 =====
+function initTheme() {
+  const saved = localStorage.getItem('pm_theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+  updateDarkModeIcon(theme);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem('pm_theme')) {
+      const t = e.matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+      updateDarkModeIcon(t);
+    }
+  });
+}
+
+function toggleDarkMode() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('pm_theme', next); } catch (e) {}
+  updateDarkModeIcon(next);
+}
+
+function updateDarkModeIcon(theme) {
+  const btn = document.getElementById('darkModeBtn');
+  if (!btn) return;
+  btn.innerHTML = theme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+  btn.title = theme === 'dark' ? '切换浅色模式' : '切换深色模式';
+}
+
+// ===== 撤销系统 =====
+let _undoData = null;
+let _undoTimer = null;
+
+function saveUndo(label, restoreFn) {
+  _undoData = restoreFn;
+  clearTimeout(_undoTimer);
+  const existing = document.getElementById('undoToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'undoToast';
+  toast.className = 'toast info undo-toast';
+  toast.innerHTML = `<i class="fas fa-info-circle"></i><span style="flex:1">${label}</span><button class="undo-btn" onclick="executeUndo()">撤销</button>`;
+  document.getElementById('toastContainer').appendChild(toast);
+  _undoTimer = setTimeout(() => {
+    toast.remove();
+    _undoData = null;
+  }, 5000);
+}
+
+function executeUndo() {
+  if (typeof _undoData === 'function') {
+    _undoData();
+    _undoData = null;
+    clearTimeout(_undoTimer);
+    const toast = document.getElementById('undoToast');
+    if (toast) toast.remove();
+    showToast('操作已撤销');
+  }
+}
+
+// ===== URL 哈希路由 =====
+function initHashRouting() {
+  window.addEventListener('hashchange', () => {
+    const sections = ['dashboard', 'projects', 'tasks', 'team', 'calendar', 'reports'];
+    const hash = location.hash.slice(1);
+    if (sections.includes(hash) && hash !== state.currentSection) showSection(hash);
+  });
 }
 
 // ===== 初始化 =====
 function init() {
   loadData();
+  initTheme();
   initCurrentUser();
+  initHashRouting();
+  // 从 hash 决定初始页面
+  const sections = ['dashboard', 'projects', 'tasks', 'team', 'calendar', 'reports'];
+  const initSection = sections.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard';
+  state.batchMode = false;
+  state.selectedTaskIds = new Set();
   renderDashboard();
+  if (initSection !== 'dashboard') showSection(initSection);
   generateNotifications();
   setupTouchDrag();
 
@@ -1505,6 +1904,29 @@ function init() {
   document.addEventListener('click', (e) => {
     const bell = e.target.closest('.notification-bell');
     if (!bell) document.getElementById('notificationDropdown').classList.remove('open');
+  });
+
+  // 键盘快捷键
+  document.addEventListener('keydown', (e) => {
+    // 输入框/textarea 内不触发
+    if (e.target.matches('input, textarea, select')) return;
+    const anyModal = document.querySelector('.modal.active');
+    if (e.key === 'Escape') {
+      if (anyModal) closeAllModals();
+      if (state.batchMode) toggleBatchMode();
+      return;
+    }
+    if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); executeUndo(); return; }
+    if (anyModal) return; // 弹窗开着时不触发其他快捷键
+    if (e.key === 'n') { e.preventDefault(); openModal('createTaskModal'); }
+    if (e.key === 'p') { e.preventDefault(); openModal('createProjectModal'); }
+    if (e.key === '/') { e.preventDefault(); document.getElementById('searchInput').focus(); }
+    if (e.key === '1') showSection('dashboard');
+    if (e.key === '2') showSection('projects');
+    if (e.key === '3') showSection('tasks');
+    if (e.key === '4') showSection('team');
+    if (e.key === '5') showSection('calendar');
+    if (e.key === '6') showSection('reports');
   });
 
   // 多标签页数据同步
