@@ -1240,3 +1240,326 @@ body {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* ===== P0: 逾期任务高亮 ===== */
+.kanban-task-card.task-overdue {
+    border-left: 3px solid var(--danger);
+    background: #fff8f8;
+}
+
+/* ===== P0: 表单内联错误 ===== */
+.field-error {
+    color: var(--danger);
+    font-size: 0.75rem;
+    margin-top: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.form-input.input-error {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 3px rgba(239,68,68,0.1) !important;
+}
+
+/* ===== P1: 通知系统 ===== */
+.notification-bell { position: relative; }
+.notification-dropdown {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    right: -0.5rem;
+    width: 320px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border);
+    z-index: 400;
+    display: none;
+    animation: fadeIn 0.2s ease;
+}
+.notification-dropdown.open { display: block; }
+.notification-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+.notification-list { max-height: 360px; overflow-y: auto; }
+.notif-empty {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--text-light);
+    font-size: 0.825rem;
+}
+.notification-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.notification-item:last-child { border-bottom: none; }
+.notification-item:hover { background: var(--bg-primary); }
+.notification-item.unread { background: rgba(79,70,229,0.04); }
+.notif-icon {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; flex-shrink: 0;
+}
+.notif-icon.danger { background: #fee2e2; color: var(--danger); }
+.notif-icon.warning { background: #fef3c7; color: var(--warning); }
+.notif-icon.info { background: #dbeafe; color: var(--primary); }
+.notif-icon.success { background: #d1fae5; color: var(--success); }
+.notif-body { flex: 1; }
+.notif-body p { font-size: 0.8rem; line-height: 1.4; }
+.notif-time { font-size: 0.7rem; color: var(--text-light); margin-top: 0.2rem; }
+
+/* ===== P1: 任务评论 ===== */
+.comments-section {
+    margin-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+.comments-section h4 {
+    font-size: 0.875rem; font-weight: 600;
+    color: var(--text-secondary); margin-bottom: 0.75rem;
+}
+.comment-item { display: flex; gap: 0.625rem; margin-bottom: 0.75rem; }
+.comment-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; color: white; flex-shrink: 0; margin-top: 0.1rem;
+}
+.comment-bubble {
+    flex: 1;
+    background: var(--bg-primary);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.75rem;
+}
+.comment-meta { display: flex; justify-content: space-between; margin-bottom: 0.2rem; }
+.comment-author { font-size: 0.775rem; font-weight: 600; }
+.comment-time-text { font-size: 0.7rem; color: var(--text-light); }
+.comment-text { font-size: 0.825rem; line-height: 1.4; }
+.comment-input-area { display: flex; gap: 0.5rem; margin-top: 0.75rem; align-items: flex-end; }
+.comment-input-area textarea {
+    flex: 1; padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius); font-size: 0.825rem;
+    resize: none; min-height: 56px; transition: var(--transition);
+    font-family: inherit;
+}
+.comment-input-area textarea:focus {
+    outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+
+/* ===== P1: 任务依赖 ===== */
+.dep-warning {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-size: 0.7rem; color: var(--warning);
+    background: #fef3c7; padding: 0.3rem 0.6rem;
+    border-radius: 4px; margin-top: 0.35rem;
+}
+
+/* ===== P2: 成员负载 ===== */
+.team-card.overloaded { border: 2px solid var(--danger); }
+.overload-tag {
+    display: inline-block; background: var(--danger); color: white;
+    font-size: 0.65rem; padding: 0.1rem 0.4rem;
+    border-radius: 10px; margin-left: 0.3rem; vertical-align: middle;
+}
+
+/* ===== P2: 里程碑 ===== */
+.milestone-item {
+    display: flex; align-items: center; gap: 0.625rem;
+    padding: 0.45rem 0; font-size: 0.825rem;
+    border-bottom: 1px solid var(--border);
+}
+.milestone-item:last-child { border-bottom: none; }
+.ms-check {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; transition: var(--transition);
+    font-size: 0.6rem; color: transparent;
+}
+.ms-check.done { background: var(--success); border-color: var(--success); color: white; }
+.ms-name { flex: 1; }
+.ms-name.done { text-decoration: line-through; color: var(--text-light); }
+.ms-due { font-size: 0.7rem; color: var(--text-light); }
+.ms-due.overdue { color: var(--danger); }
+.milestone-input-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 0.5rem; margin-bottom: 0.5rem; align-items: center;
+}
+
+/* ===== P2: 报表工具栏 & 燃尽图 ===== */
+.reports-toolbar {
+    display: flex; justify-content: flex-end;
+    gap: 0.5rem; margin-bottom: 1rem;
+}
+#burndownChart { max-width: 100% !important; max-height: 250px !important; }
+
+/* ===== 优化补丁 ===== */
+
+/* 确认对话框 */
+.modal-sm { max-width: 400px !important; }
+.confirm-icon { text-align: center; font-size: 2rem; margin-bottom: 0.75rem; }
+.confirm-message { text-align: center; color: var(--text-secondary); line-height: 1.6; }
+
+/* 项目成员管理 */
+.member-toggle-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.member-toggle-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.625rem 0.875rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+.member-toggle-info { display: flex; align-items: center; gap: 0.75rem; }
+.member-toggle-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; color: white; flex-shrink: 0;
+}
+.member-in-project { border-left: 3px solid var(--success); }
+
+/* 日历选中日 */
+.calendar-day { cursor: pointer; }
+.calendar-day.selected {
+    background: var(--primary) !important;
+    color: white !important;
+    border-radius: 4px;
+    font-weight: 700;
+}
+.calendar-day.selected .task-dot { background: white; }
+.calendar-day:hover:not(.other-month) { background: rgba(79,70,229,0.1); border-radius: 4px; }
+
+/* 数据导入/恢复按钮 */
+.reports-toolbar .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+
+/* 看板排序下拉 */
+#kanbanSortBy { font-size: 0.8rem; }
+
+/* 当前用户 select 样式 */
+#currentUserSelect option { color: #333; background: white; }
+
+/* ===== 第二轮优化补丁 ===== */
+
+/* 深色模式 */
+[data-theme="dark"] {
+    --bg-primary: #1e1e2e;
+    --bg-secondary: #181825;
+    --bg-tertiary: #11111b;
+    --text-primary: #cdd6f4;
+    --text-secondary: #bac2de;
+    --text-light: #6c7086;
+    --border: #45475a;
+    --primary: #89b4fa;
+    --primary-dark: #74c7ec;
+    --success: #a6e3a1;
+    --warning: #f9e2af;
+    --danger: #f38ba8;
+    --shadow: 0 1px 3px rgba(0,0,0,0.5);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.6);
+}
+[data-theme="dark"] .sidebar { background: #181825; border-right: 1px solid #45475a; }
+[data-theme="dark"] .kanban-task-card { background: #181825; border-color: #45475a; }
+[data-theme="dark"] .modal-content { background: #1e1e2e; }
+[data-theme="dark"] .form-input { background: #181825; color: #cdd6f4; border-color: #45475a; }
+[data-theme="dark"] .form-input:focus { border-color: #89b4fa; }
+[data-theme="dark"] .top-header { background: #181825; border-bottom-color: #45475a; }
+[data-theme="dark"] .search-box { background: #11111b; border-color: #45475a; }
+[data-theme="dark"] .search-box input { color: #cdd6f4; }
+[data-theme="dark"] .project-card { background: #181825; }
+[data-theme="dark"] .team-card { background: #181825; }
+[data-theme="dark"] .stat-card { background: #181825; }
+[data-theme="dark"] .card { background: #181825; border-color: #45475a; }
+[data-theme="dark"] .notification-dropdown { background: #1e1e2e; border-color: #45475a; }
+[data-theme="dark"] .notification-item:hover { background: #181825; }
+[data-theme="dark"] .btn-secondary { background: #45475a; color: #cdd6f4; }
+[data-theme="dark"] #darkModeBtn i::before { content: "\f185"; } /* sun icon */
+
+/* 拖拽放置区高亮 */
+.kanban-tasks.drag-over {
+    background: rgba(79,70,229,0.08);
+    border: 2px dashed var(--primary);
+    border-radius: var(--radius);
+    transition: background 0.15s;
+}
+
+/* 快捷完成按钮 */
+.kanban-task-card { position: relative; }
+.quick-done-btn {
+    position: absolute;
+    top: 0.4rem; right: 0.4rem;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; color: var(--text-light);
+    opacity: 0; transition: opacity 0.15s, background 0.15s;
+    z-index: 2;
+}
+.kanban-task-card:hover .quick-done-btn { opacity: 1; }
+.quick-done-btn:hover { background: var(--success); color: white; border-color: var(--success); }
+.kanban-task-card.status-done .quick-done-btn { opacity: 1; background: var(--success); color: white; border-color: var(--success); }
+
+/* 搜索关键词高亮 */
+mark { background: #fef08a; color: #1e1e2e; border-radius: 2px; padding: 0 1px; }
+[data-theme="dark"] mark { background: #f9e2af; color: #1e1e2e; }
+
+/* 批量选择 */
+.task-select-cb {
+    position: absolute; top: 0.4rem; left: 0.4rem;
+    width: 16px; height: 16px; cursor: pointer;
+    opacity: 0; transition: opacity 0.15s;
+    z-index: 2;
+}
+.batch-mode .task-select-cb { opacity: 1; }
+.batch-mode .kanban-task-card { cursor: default; padding-left: 2rem; }
+.kanban-task-card.selected-task { border-color: var(--primary); background: rgba(79,70,229,0.06); }
+.batch-action-bar {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    background: var(--primary);
+    color: white; border-radius: var(--radius);
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+.batch-action-bar .batch-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.batch-action-bar .btn { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+.batch-action-bar .btn:hover { background: rgba(255,255,255,0.35); }
+.batch-action-bar .btn-danger { background: #f38ba8; border-color: transparent; }
+.batch-action-bar .btn-secondary { background: rgba(0,0,0,0.2); }
+
+/* 撤销 Toast */
+.undo-toast { display: flex; align-items: center; gap: 0.5rem; min-width: 260px; }
+.undo-toast .undo-btn {
+    margin-left: auto; padding: 0.2rem 0.6rem;
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: var(--radius); cursor: pointer;
+    background: transparent; color: white; font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.undo-toast .undo-btn:hover { background: rgba(255,255,255,0.2); }
+
+/* 深色模式切换按钮 */
+#darkModeBtn { font-size: 0.9rem; }
+
+/* 评论删除按钮 */
+.comment-delete-btn {
+    margin-left: auto; opacity: 0;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-light); font-size: 0.75rem;
+    transition: opacity 0.15s, color 0.15s;
+}
+.comment-item:hover .comment-delete-btn { opacity: 1; }
+.comment-delete-btn:hover { color: var(--danger); }
