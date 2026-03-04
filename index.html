@@ -272,30 +272,47 @@
             <div class="team-grid" id="teamGrid"></div>
         </section>
 
-        <!-- 日历视图 -->
+        <!-- 日历视图（Notion Calendar 风格） -->
         <section class="section" id="section-calendar">
-            <div class="calendar-container">
-                <div class="calendar-header">
-                    <button class="btn btn-icon" onclick="changeMonth(-1)">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <h2 id="calendarTitle"></h2>
-                    <button class="btn btn-icon" onclick="changeMonth(1)">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-                <div class="calendar-grid">
-                    <div class="calendar-day-names">
-                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+            <div class="notion-calendar-layout">
+                <aside class="calendar-sidebar-panel card">
+                    <div class="calendar-sidebar-top">
+                        <button class="btn btn-primary btn-block" onclick="openModal('createTaskModal')">
+                            <i class="fas fa-plus"></i> 新建日程
+                        </button>
+                        <button class="btn btn-secondary btn-block" onclick="goToToday()">今天</button>
                     </div>
-                    <div class="calendar-days" id="calendarDays"></div>
+                    <div class="mini-calendar" id="miniCalendar"></div>
+                    <div class="calendar-list">
+                        <h3>我的日历</h3>
+                        <ul id="calendarLegend"></ul>
+                    </div>
+                </aside>
+
+                <div class="calendar-main card">
+                    <div class="calendar-header">
+                        <div class="calendar-nav">
+                            <button class="btn btn-icon" onclick="changeMonth(-1)">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <h2 id="calendarTitle"></h2>
+                            <button class="btn btn-icon" onclick="changeMonth(1)">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="calendar-view-switch">
+                            <button class="btn btn-sm is-active">月</button>
+                            <button class="btn btn-sm" disabled>周</button>
+                            <button class="btn btn-sm" disabled>日</button>
+                        </div>
+                    </div>
+                    <div class="calendar-grid">
+                        <div class="calendar-day-names">
+                            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                        </div>
+                        <div class="calendar-days" id="calendarDays"></div>
+                    </div>
                 </div>
-            </div>
-            <div class="card" style="margin-top: 1rem;">
-                <div class="card-header">
-                    <h2>本月截止任务</h2>
-                </div>
-                <div id="monthlyTasks"></div>
             </div>
         </section>
 
